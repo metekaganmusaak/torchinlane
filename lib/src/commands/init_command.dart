@@ -43,15 +43,12 @@ class InitCommand extends Command<int> {
     final appleId = ask('Apple ID email');
     final ascKeyId = ask('App Store Connect API Key ID');
     final ascIssuerId = ask('App Store Connect API Issuer ID');
-    final ascKeyPath = ask('Path to App Store Connect .p8 key file', defaultValue: 'ios/api_key.p8');
+    const ascKeyPath = 'ios/fastlane/api_key.p8';
     final firebaseCrashlytics = askYesNo('Upload dSYMs to Firebase Crashlytics?');
 
     _logger.info('\n--- Android ---');
     final packageName = ask('Android package name (e.g. com.company.app)');
-    final serviceAccountJson = ask(
-      'Path to Google Play service account JSON',
-      defaultValue: 'fastlane/fastlane-service-account.json',
-    );
+    const serviceAccountJson = 'android/fastlane/fastlane-service-account.json';
 
     _logger.info('\n--- Changelogs ---');
     final sourceLocale = ask('Source locale for changelog translation', defaultValue: 'en');

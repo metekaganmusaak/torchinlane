@@ -2,7 +2,7 @@ name: torchinlane
 description: >-
   Global CLI to scaffold fastlane, deploy Flutter apps to TestFlight/App Store
   and Play Store, translate store changelogs, and generate store screenshot prompts.
-version: 0.1.1
+version: 0.1.2
 repository: https://github.com/metekaganmusaak/torchinlane
 topics:
   - flutter

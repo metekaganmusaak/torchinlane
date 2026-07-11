@@ -35,7 +35,7 @@ class FastlaneScaffolder {
     ));
 
     _write('$root/android/fastlane/Appfile', renderTemplate(androidAppfileTemplate, {
-      'service_account_json': android.serviceAccountJson,
+      'service_account_json': _relativeToAndroidDir(android.serviceAccountJson),
       'package_name': android.packageName,
     }));
 
@@ -65,6 +65,12 @@ class FastlaneScaffolder {
     ));
 
     _updateGitignore(root, ios, android);
+  }
+
+  /// [path] is relative to the project root (e.g. `android/fastlane/x.json`).
+  /// The Android Appfile runs with cwd `android/`, so strip that prefix.
+  String _relativeToAndroidDir(String path) {
+    return path.startsWith('android/') ? path.substring('android/'.length) : path;
   }
 
   void _write(String path, String content) {

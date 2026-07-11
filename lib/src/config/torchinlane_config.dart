@@ -79,13 +79,13 @@ class TorchinlaneConfig {
         appleId: iosMap['apple_id'] as String,
         ascKeyId: iosMap['asc_key_id'] as String,
         ascIssuerId: iosMap['asc_issuer_id'] as String,
-        ascKeyPath: (iosMap['asc_key_path'] as String?) ?? 'ios/api_key.p8',
+        ascKeyPath: (iosMap['asc_key_path'] as String?) ?? 'ios/fastlane/api_key.p8',
         firebaseCrashlytics: (iosMap['firebase_crashlytics'] as bool?) ?? false,
       ),
       android: AndroidConfig(
         packageName: androidMap['package_name'] as String,
         serviceAccountJson: (androidMap['service_account_json'] as String?) ??
-            'fastlane/fastlane-service-account.json',
+            'android/fastlane/fastlane-service-account.json',
       ),
       changelogs: ChangelogsConfig(
         dir: (changelogsMap?['dir'] as String?) ?? 'changelogs',

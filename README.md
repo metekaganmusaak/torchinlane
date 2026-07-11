@@ -42,6 +42,25 @@ API keys.
 torchinlane init
 ```
 
+After it finishes, place your credentials at the fixed default paths it
+prints:
+
+- App Store Connect `.p8` key → `ios/fastlane/api_key.p8`
+- Google Play service account JSON → `android/fastlane/fastlane-service-account.json`
+
+Both paths are added to `.gitignore` automatically.
+
+### `torchinlane uninstall`
+
+Removes everything `torchinlane init` created — `ios/fastlane/`,
+`android/fastlane/`, `fastlane/`, `ios/ExportOptions.plist`, and
+`torchinlane.yaml`. Leaves `changelogs/` untouched.
+
+```bash
+torchinlane uninstall          # asks for confirmation
+torchinlane uninstall --yes    # skip confirmation
+```
+
 ### `torchinlane deploy`
 
 Runs `flutter clean && flutter pub get`, builds (obfuscated), and uploads via
@@ -89,28 +108,28 @@ torchinlane doctor
 ## Configuration
 
 `torchinlane init` writes `torchinlane.yaml` to your project root. It is safe
-to commit — it holds paths and IDs, not secrets. Your App Store Connect `.p8`
-key and Google Play service account JSON are added to `.gitignore`
-automatically.
+to commit — it holds paths and IDs, not secrets. Credential paths
+(`asc_key_path`, `service_account_json`) are fixed defaults, not prompted
+for, and are added to `.gitignore` automatically.
 
 ```yaml
 app_name: MyApp
 ios:
   bundle_id: com.example.myapp
   team_id: ABCDE12345
-  itc_team_id: ABCDE12345       # optional, defaults to team_id
+  itc_team_id: ABCDE12345 # optional, defaults to team_id
   apple_id: you@example.com
   asc_key_id: XXXXXXXXXX
   asc_issuer_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  asc_key_path: ios/api_key.p8  # optional, this is the default
-  firebase_crashlytics: false   # optional, uploads dSYMs when true
+  asc_key_path: ios/fastlane/api_key.p8 # fixed default, not prompted
+  firebase_crashlytics: false # optional, uploads dSYMs when true
 android:
   package_name: com.example.myapp
-  service_account_json: fastlane/fastlane-service-account.json  # relative to android/, optional, this is the default
+  service_account_json: android/fastlane/fastlane-service-account.json # fixed default, not prompted
 changelogs:
-  dir: changelogs               # optional
-  source_locale: en             # optional
-  locales: [ar, bn, cs, ...]    # optional, defaults to 32 store locales
+  dir: changelogs # optional
+  source_locale: en # optional
+  locales: [ar, bn, cs, ...] # optional, defaults to 32 store locales
 build:
   obfuscate: true
   split_debug_info: build/debug-info

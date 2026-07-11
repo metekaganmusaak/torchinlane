@@ -1,6 +1,8 @@
 ## 0.1.1
 
-- Fix default `service_account_json` path (was `android/fastlane/...`, now `fastlane/...` — relative to the `android/` dir where fastlane runs, fixing a duplicated-path lookup failure in `upload_to_play_store`).
+- `torchinlane init` no longer prompts for the App Store Connect `.p8` key path or the Google Play service account JSON path. Both are now fixed defaults (`ios/fastlane/api_key.p8`, `android/fastlane/fastlane-service-account.json`) printed at the end of the command.
+- Add `torchinlane uninstall` — removes everything `init` created (fastlane dirs, `ExportOptions.plist`, `torchinlane.yaml`), leaving `changelogs/` untouched.
+- Fix a path-resolution bug where `service_account_json` was interpreted against different base directories in `doctor` vs. the generated Android Appfile, causing `upload_to_play_store` to fail with a duplicated path.
 
 ## 0.1.0
 
