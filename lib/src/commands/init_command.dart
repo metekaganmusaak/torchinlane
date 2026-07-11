@@ -50,7 +50,7 @@ class InitCommand extends Command<int> {
     final packageName = ask('Android package name (e.g. com.company.app)');
     final serviceAccountJson = ask(
       'Path to Google Play service account JSON',
-      defaultValue: 'android/fastlane/fastlane-service-account.json',
+      defaultValue: 'fastlane/fastlane-service-account.json',
     );
 
     _logger.info('\n--- Changelogs ---');

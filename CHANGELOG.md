@@ -1,3 +1,7 @@
+## 0.1.1
+
+- Fix default `service_account_json` path (was `android/fastlane/...`, now `fastlane/...` — relative to the `android/` dir where fastlane runs, fixing a duplicated-path lookup failure in `upload_to_play_store`).
+
 ## 0.1.0
 
 - Initial release.

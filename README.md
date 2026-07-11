@@ -106,7 +106,7 @@ ios:
   firebase_crashlytics: false   # optional, uploads dSYMs when true
 android:
   package_name: com.example.myapp
-  service_account_json: android/fastlane/fastlane-service-account.json
+  service_account_json: fastlane/fastlane-service-account.json  # relative to android/, optional, this is the default
 changelogs:
   dir: changelogs               # optional
   source_locale: en             # optional

@@ -85,7 +85,7 @@ class TorchinlaneConfig {
       android: AndroidConfig(
         packageName: androidMap['package_name'] as String,
         serviceAccountJson: (androidMap['service_account_json'] as String?) ??
-            'android/fastlane/fastlane-service-account.json',
+            'fastlane/fastlane-service-account.json',
       ),
       changelogs: ChangelogsConfig(
         dir: (changelogsMap?['dir'] as String?) ?? 'changelogs',
