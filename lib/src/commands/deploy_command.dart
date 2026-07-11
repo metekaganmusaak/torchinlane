@@ -58,50 +58,73 @@ class DeployCommand extends Command<int> {
     final root = project.root.path;
     final env = skipReleaseNotes ? {'FASTLANE_SKIP_RELEASE_NOTES': '1'} : <String, String>{};
 
-    final steps = <_Step>[];
-
-    if (!uploadOnly) {
-      if (deepClean) {
-        if (buildAndroid) {
-          steps.add(_Step('rm', ['-rf', '$root/android/.gradle', '$root/android/app/build']));
-        }
-        if (buildIos) {
-          steps.add(_Step('rm', ['-rf', '$root/ios/Pods', '$root/ios/Podfile.lock']));
-        }
-      }
-      if (!skipClean) {
-        steps.add(_Step('flutter', ['clean'], cwd: root));
-        steps.add(_Step('flutter', ['pub', 'get'], cwd: root));
-      }
-      if (buildIos) {
-        steps.add(_Step('pod', ['install'], cwd: '$root/ios'));
-      }
+    final sharedSteps = <_Step>[];
+    if (!uploadOnly && !skipClean) {
+      sharedSteps.add(_Step('flutter', ['clean'], cwd: root));
+      sharedSteps.add(_Step('flutter', ['pub', 'get'], cwd: root));
     }
 
+    final androidSteps = <_Step>[];
     if (buildAndroid) {
       if (!uploadOnly) {
+        if (deepClean) {
+          androidSteps.add(_Step('rm', ['-rf', '$root/android/.gradle', '$root/android/app/build']));
+        }
         final args = ['build', 'appbundle'];
         if (config.obfuscate) {
           args.addAll(['--obfuscate', '--split-debug-info=${config.splitDebugInfo}']);
         }
-        steps.add(_Step('flutter', args, cwd: root));
+        androidSteps.add(_Step('flutter', args, cwd: root));
       }
       final lane = target == 'production' ? 'deploy_production' : 'deploy_internal';
-      steps.add(_Step('fastlane', [lane], cwd: '$root/android', env: env));
+      androidSteps.add(_Step('fastlane', [lane], cwd: '$root/android', env: env));
     }
 
+    final iosSteps = <_Step>[];
     if (buildIos) {
       if (!uploadOnly) {
+        if (deepClean) {
+          iosSteps.add(_Step('rm', ['-rf', '$root/ios/Pods', '$root/ios/Podfile.lock']));
+        }
+        iosSteps.add(_Step('pod', ['install'], cwd: '$root/ios'));
         final args = ['build', 'ipa', '--export-options-plist=ios/ExportOptions.plist'];
         if (config.obfuscate) {
           args.addAll(['--obfuscate', '--split-debug-info=${config.splitDebugInfo}']);
         }
-        steps.add(_Step('flutter', args, cwd: root));
+        iosSteps.add(_Step('flutter', args, cwd: root));
       }
       final lane = target == 'production' ? 'release' : 'beta';
-      steps.add(_Step('fastlane', [lane], cwd: '$root/ios', env: env));
+      iosSteps.add(_Step('fastlane', [lane], cwd: '$root/ios', env: env));
     }
 
+    if (sharedSteps.isNotEmpty) {
+      final sharedOk = await _runSteps(sharedSteps, dryRun: dryRun);
+      if (!sharedOk) {
+        _logger.error('\nShared setup failed — aborting before platform builds.');
+        return 1;
+      }
+    }
+
+    final failedPlatforms = <String>[];
+    if (buildAndroid) {
+      _logger.info('\n--- Android ---');
+      if (!await _runSteps(androidSteps, dryRun: dryRun)) failedPlatforms.add('android');
+    }
+    if (buildIos) {
+      _logger.info('\n--- iOS ---');
+      if (!await _runSteps(iosSteps, dryRun: dryRun)) failedPlatforms.add('ios');
+    }
+
+    if (failedPlatforms.isNotEmpty) {
+      _logger.error('\nDeploy failed for: ${failedPlatforms.join(', ')}.');
+      return 1;
+    }
+
+    if (!dryRun) _logger.success('\nDeploy complete.');
+    return 0;
+  }
+
+  Future<bool> _runSteps(List<_Step> steps, {required bool dryRun}) async {
     for (final step in steps) {
       _logger.info('\$ ${step.executable} ${step.arguments.join(' ')}${step.cwd != null ? '  (in ${step.cwd})' : ''}');
       if (dryRun) continue;
@@ -112,12 +135,10 @@ class DeployCommand extends Command<int> {
       });
       if (!result.success) {
         _logger.error('Step failed: ${step.executable} ${step.arguments.join(' ')} (exit ${result.exitCode})');
-        return result.exitCode;
+        return false;
       }
     }
-
-    if (!dryRun) _logger.success('\nDeploy complete.');
-    return 0;
+    return true;
   }
 }
 

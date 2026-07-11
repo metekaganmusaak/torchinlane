@@ -1,8 +1,15 @@
 # Changelog
 
+## 0.1.4
+
+- Bug fixes and try to make it as stable as rock!
+- Also created new package logo to get some points!
+
 ## 0.1.3
 
 - Fix `upload_to_play_store` crashing with `Could not find option 'release_notes'` during `torchinlane deploy --platform android`. The Play Store upload (Supply) action doesn't accept changelog text directly — it only reads changelogs from a `metadata_path` directory tree. `deploy_internal`, `deploy_production`, and `update_release_notes` now write release notes to a temp metadata directory (`<locale>/changelogs/default.txt`) and pass `metadata_path` instead.
+- Fix a follow-up `Invalid request` error from the same flow: Supply derives its language list from the top-level folder names under `metadata_path`, so the temp directory can't have an extra nesting level — release notes are now written directly to `<tmp>/<play_locale>/changelogs/default.txt` instead of `<tmp>/android/<play_locale>/...`.
+- Fix `torchinlane deploy --platform ios,android` skipping the iOS build entirely whenever the Android step failed. Android and iOS now build/upload independently — a failure in one no longer blocks the other — and the command reports which platform(s) failed at the end.
 - Document the changelog workflow in the README: how to find your source locale, write `changelogs/<locale>/release_notes.txt`, translate it to the other 31 locales, and clear it after a release.
 
 ## 0.1.2

@@ -163,8 +163,10 @@ platform :android do
     }
     if metadata_path
       upload_options[:metadata_path] = metadata_path
+      upload_options[:skip_upload_metadata] = true
       upload_options[:skip_upload_images] = true
       upload_options[:skip_upload_screenshots] = true
+      upload_options[:skip_upload_changelogs] = false
     else
       upload_options[:skip_upload_metadata] = true
     end
@@ -185,8 +187,10 @@ platform :android do
     }
     if metadata_path
       upload_options[:metadata_path] = metadata_path
+      upload_options[:skip_upload_metadata] = true
       upload_options[:skip_upload_images] = true
       upload_options[:skip_upload_screenshots] = true
+      upload_options[:skip_upload_changelogs] = false
     else
       upload_options[:skip_upload_metadata] = true
     end
@@ -204,8 +208,10 @@ platform :android do
       metadata_path: metadata_path,
       skip_upload_aab: true,
       skip_upload_apk: true,
+      skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
+      skip_upload_changelogs: false,
       validate_only: false
     )
   end
@@ -250,16 +256,18 @@ module ChangelogHelper
   end
 
   # Supply (upload_to_play_store) reads changelogs from a metadata directory
-  # tree, not from a release_notes: parameter. Writes
-  # <tmp>/android/<play_locale>/changelogs/default.txt for every locale that
-  # has release notes and returns the metadata root path, or nil if none do.
+  # tree, not from a release_notes: parameter. It also derives the language
+  # list from the top-level folder names under metadata_path, so those must
+  # be the play_locale codes directly (no extra nesting). Writes
+  # <tmp>/<play_locale>/changelogs/default.txt for every locale that has
+  # release notes and returns the metadata root path, or nil if none do.
   def self.write_google_play_metadata(changelogs_dir)
     notes = google_play_release_notes(changelogs_dir)
     return nil if notes.empty?
 
     metadata_root = Dir.mktmpdir('torchinlane-supply-metadata')
     notes.each do |note|
-      dir = File.join(metadata_root, 'android', note[:language], 'changelogs')
+      dir = File.join(metadata_root, note[:language], 'changelogs')
       FileUtils.mkdir_p(dir)
       File.write(File.join(dir, 'default.txt'), note[:text])
     end
