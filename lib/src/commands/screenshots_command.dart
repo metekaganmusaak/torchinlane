@@ -9,12 +9,10 @@ import '../shell/cli_prompt.dart';
 import '../shell/logger.dart';
 
 class ScreenshotsCommand extends Command<int> {
-  ScreenshotsCommand({Logger logger = const Logger()}) : _logger = logger {
+  ScreenshotsCommand({Logger logger = const Logger()}) {
     addSubcommand(_CaptureCommand(logger: logger));
     addSubcommand(_PromptsCommand(logger: logger));
   }
-
-  final Logger _logger;
 
   @override
   String get name => 'screenshots';

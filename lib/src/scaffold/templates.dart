@@ -280,13 +280,15 @@ String renderTemplate(String template, Map<String, String> values, {Map<String, 
   for (final entry in flags.entries) {
     final openTag = '{{#${entry.key}}}';
     final closeTag = '{{/${entry.key}}}';
-    final openIndex = result.indexOf(openTag);
-    if (openIndex == -1) continue;
-    final closeIndex = result.indexOf(closeTag, openIndex);
-    if (closeIndex == -1) continue;
-    final inner = result.substring(openIndex + openTag.length, closeIndex);
-    final replacement = entry.value ? inner : '';
-    result = result.replaceRange(openIndex, closeIndex + closeTag.length, replacement);
+    while (true) {
+      final openIndex = result.indexOf(openTag);
+      if (openIndex == -1) break;
+      final closeIndex = result.indexOf(closeTag, openIndex);
+      if (closeIndex == -1) break;
+      final inner = result.substring(openIndex + openTag.length, closeIndex);
+      final replacement = entry.value ? inner : '';
+      result = result.replaceRange(openIndex, closeIndex + closeTag.length, replacement);
+    }
   }
 
   values.forEach((key, value) {

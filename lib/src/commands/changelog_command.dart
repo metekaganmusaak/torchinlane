@@ -9,13 +9,11 @@ import '../shell/logger.dart';
 import '../shell/process_runner.dart';
 
 class ChangelogCommand extends Command<int> {
-  ChangelogCommand({Logger logger = const Logger()}) : _logger = logger {
+  ChangelogCommand({Logger logger = const Logger()}) {
     addSubcommand(_TranslateCommand(logger: logger));
     addSubcommand(_PushCommand(logger: logger));
     addSubcommand(_ClearCommand(logger: logger));
   }
-
-  final Logger _logger;
 
   @override
   String get name => 'changelog';

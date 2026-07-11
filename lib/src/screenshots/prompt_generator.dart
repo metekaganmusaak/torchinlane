@@ -102,7 +102,7 @@ Output as clean Markdown with two sections: "## App Store (10)" and "## Google P
       Uri.parse(_endpoint),
       headers: {
         'content-type': 'application/json',
-        'x-api-key': _apiKey!,
+        'x-api-key': _apiKey,
         'anthropic-version': '2023-06-01',
       },
       body: body,
