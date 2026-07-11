@@ -153,15 +153,21 @@ platform :android do
   desc "Upload AAB to Google Play Internal Testing"
   lane :deploy_internal do
     changelogs_dir = File.expand_path('../../changelogs', __dir__)
-    notes = ChangelogHelper.google_play_release_notes(changelogs_dir)
     skip_release_notes = ENV['FASTLANE_SKIP_RELEASE_NOTES'] == '1'
+    metadata_path = skip_release_notes ? nil : ChangelogHelper.write_google_play_metadata(changelogs_dir)
+
     upload_options = {
       track: 'internal',
       aab: '../build/app/outputs/bundle/release/app-release.aab',
       release_status: 'draft'
     }
-
-    upload_options[:release_notes] = notes if !skip_release_notes && !notes.empty?
+    if metadata_path
+      upload_options[:metadata_path] = metadata_path
+      upload_options[:skip_upload_images] = true
+      upload_options[:skip_upload_screenshots] = true
+    else
+      upload_options[:skip_upload_metadata] = true
+    end
 
     upload_to_play_store(upload_options)
   end
@@ -169,15 +175,21 @@ platform :android do
   desc "Upload AAB to Google Play Production"
   lane :deploy_production do
     changelogs_dir = File.expand_path('../../changelogs', __dir__)
-    notes = ChangelogHelper.google_play_release_notes(changelogs_dir)
     skip_release_notes = ENV['FASTLANE_SKIP_RELEASE_NOTES'] == '1'
+    metadata_path = skip_release_notes ? nil : ChangelogHelper.write_google_play_metadata(changelogs_dir)
+
     upload_options = {
       track: 'production',
       aab: '../build/app/outputs/bundle/release/app-release.aab',
       release_status: 'draft'
     }
-
-    upload_options[:release_notes] = notes if !skip_release_notes && !notes.empty?
+    if metadata_path
+      upload_options[:metadata_path] = metadata_path
+      upload_options[:skip_upload_images] = true
+      upload_options[:skip_upload_screenshots] = true
+    else
+      upload_options[:skip_upload_metadata] = true
+    end
 
     upload_to_play_store(upload_options)
   end
@@ -185,14 +197,13 @@ platform :android do
   desc "Update Google Play release notes only (no binary upload)"
   lane :update_release_notes do
     changelogs_dir = File.expand_path('../../changelogs', __dir__)
-    notes = ChangelogHelper.google_play_release_notes(changelogs_dir)
+    metadata_path = ChangelogHelper.write_google_play_metadata(changelogs_dir)
 
     upload_to_play_store(
       track: 'internal',
-      release_notes: notes,
+      metadata_path: metadata_path,
       skip_upload_aab: true,
       skip_upload_apk: true,
-      skip_upload_metadata: true,
       skip_upload_images: true,
       skip_upload_screenshots: true,
       validate_only: false
@@ -202,6 +213,9 @@ end
 ''';
 
 const changelogHelperTemplate = r'''
+require 'tmpdir'
+require 'fileutils'
+
 module ChangelogHelper
   GOOGLE_PLAY_LOCALE_MAP = {
     'ar' => 'ar', 'bn' => 'bn-BD', 'cs' => 'cs-CZ', 'da' => 'da-DK', 'de' => 'de-DE',
@@ -233,6 +247,23 @@ module ChangelogHelper
       notes << { language: play_locale, text: text[0, 500] }
     end
     notes
+  end
+
+  # Supply (upload_to_play_store) reads changelogs from a metadata directory
+  # tree, not from a release_notes: parameter. Writes
+  # <tmp>/android/<play_locale>/changelogs/default.txt for every locale that
+  # has release notes and returns the metadata root path, or nil if none do.
+  def self.write_google_play_metadata(changelogs_dir)
+    notes = google_play_release_notes(changelogs_dir)
+    return nil if notes.empty?
+
+    metadata_root = Dir.mktmpdir('torchinlane-supply-metadata')
+    notes.each do |note|
+      dir = File.join(metadata_root, 'android', note[:language], 'changelogs')
+      FileUtils.mkdir_p(dir)
+      File.write(File.join(dir, 'default.txt'), note[:text])
+    end
+    metadata_root
   end
 
   def self.testflight_changelog(changelogs_dir, locale = 'en')

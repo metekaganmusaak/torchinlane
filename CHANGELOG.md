@@ -1,8 +1,19 @@
-## 0.1.1
+# Changelog
+
+## 0.1.3
+
+- Fix `upload_to_play_store` crashing with `Could not find option 'release_notes'` during `torchinlane deploy --platform android`. The Play Store upload (Supply) action doesn't accept changelog text directly — it only reads changelogs from a `metadata_path` directory tree. `deploy_internal`, `deploy_production`, and `update_release_notes` now write release notes to a temp metadata directory (`<locale>/changelogs/default.txt`) and pass `metadata_path` instead.
+- Document the changelog workflow in the README: how to find your source locale, write `changelogs/<locale>/release_notes.txt`, translate it to the other 31 locales, and clear it after a release.
+
+## 0.1.2
 
 - `torchinlane init` no longer prompts for the App Store Connect `.p8` key path or the Google Play service account JSON path. Both are now fixed defaults (`ios/fastlane/api_key.p8`, `android/fastlane/fastlane-service-account.json`) printed at the end of the command.
 - Add `torchinlane uninstall` — removes everything `init` created (fastlane dirs, `ExportOptions.plist`, `torchinlane.yaml`), leaving `changelogs/` untouched.
 - Fix a path-resolution bug where `service_account_json` was interpreted against different base directories in `doctor` vs. the generated Android Appfile, causing `upload_to_play_store` to fail with a duplicated path.
+
+## 0.1.1
+
+- Improvements made, nothing much.
 
 ## 0.1.0
 

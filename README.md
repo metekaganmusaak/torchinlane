@@ -92,6 +92,64 @@ torchinlane changelog push --platform ios,android  # push notes to stores withou
 torchinlane changelog clear  # empty all release_notes.txt after a release
 ```
 
+#### How to update the changelog for a release
+
+`torchinlane init` scaffolds an empty `changelogs/<locale>/release_notes.txt`
+for every locale. `torchinlane deploy` reads these files and attaches them to
+the store upload automatically — **if a file is empty, deploy does not fail,
+it just uploads without release notes for that locale.**
+
+1. **Find your source locale.** It's whatever you entered at the
+   `Source locale for changelog translation` prompt during `torchinlane
+   init` (check `changelogs.source_locale` in `torchinlane.yaml` if you
+   forgot — it defaults to `en`).
+
+2. **Write your release notes into that locale's file.** For example, if
+   your source locale is `en`:
+
+   ```bash
+   echo "Bug fixes and performance improvements." > changelogs/en/release_notes.txt
+   ```
+
+   Or open `changelogs/en/release_notes.txt` in an editor and write freely
+   — multi-line text is fine.
+
+3. **(Optional) Translate to the other 31 store locales** using the Claude
+   API:
+
+   ```bash
+   export ANTHROPIC_API_KEY=your-key
+   torchinlane changelog translate --from en
+   ```
+
+   This reads `changelogs/en/release_notes.txt` and writes a translated
+   version into every other `changelogs/<locale>/release_notes.txt`. Skip
+   this step if you only ship one locale, or want to write translations by
+   hand.
+
+4. **Deploy.** `torchinlane deploy` picks up the notes automatically:
+
+   ```bash
+   torchinlane deploy --platform ios,android --target internal
+   ```
+
+   Pass `--skip-release-notes` to upload a build without attaching any
+   changelog, regardless of what's in the files.
+
+5. **After the release, clear the notes** so next time's changelog doesn't
+   accidentally reuse old text:
+
+   ```bash
+   torchinlane changelog clear
+   ```
+
+If you'd rather push updated release notes to the stores without shipping a
+new binary (e.g. you forgot to add notes to an already-uploaded build), use:
+
+```bash
+torchinlane changelog push --platform ios,android
+```
+
 ### `torchinlane screenshots`
 
 ```bash
