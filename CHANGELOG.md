@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+
+- Updated Readme. Nothing else. Now you can use this version to upload your releases either production or internal tests. But in Google Play Store, you manually send your release to the store review.
+
 ## 0.1.4
 
 - Bug fixes and try to make it as stable as rock!

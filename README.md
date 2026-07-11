@@ -64,14 +64,53 @@ torchinlane uninstall --yes    # skip confirmation
 ### `torchinlane deploy`
 
 Runs `flutter clean && flutter pub get`, builds (obfuscated), and uploads via
-fastlane.
+fastlane. Android and iOS build/upload independently — if one fails the
+other still runs, and the command reports which platform(s) failed at the
+end.
 
 ```bash
 torchinlane deploy --platform ios,android --target internal
 torchinlane deploy --platform ios --target production
+torchinlane deploy --platform android --target production
+torchinlane deploy --platform ios,android --target production
 torchinlane deploy --platform android --target internal --upload-only
 torchinlane deploy --dry-run
 ```
+
+#### Flags
+
+| Flag | Default | What it does |
+| --- | --- | --- |
+| `--platform` | `ios,android` | Which platform(s) to build/deploy. `ios`, `android`, or `ios,android`. |
+| `--target` | `internal` | `internal` = TestFlight (iOS) / Internal Testing track (Android). `production` = App Store / Play Store production track — see below, this still requires a manual final step. |
+| `--upload-only` | off | Skip `flutter build`; upload the AAB/IPA that's already in `build/`. Useful for retrying a failed upload without rebuilding. |
+| `--skip-clean` | off | Skip `flutter clean && flutter pub get` before building. Faster iteration when you know the build is already clean. |
+| `--deep-clean` | off | Also wipe `android/.gradle`, `android/app/build`, `ios/Pods`, `ios/Podfile.lock` before building. Use when you suspect stale native caches. |
+| `--skip-release-notes` | off | Upload without attaching changelog text, regardless of what's in `changelogs/`. |
+| `--dry-run` | off | Print every command that would run, without executing anything. Good for sanity-checking a config before a real deploy. |
+
+#### `--target internal` — what happens
+
+- **Android**: builds an AAB, uploads it to the Play Console **Internal Testing** track as a draft. Visible immediately to your internal testers list, no review needed.
+- **iOS**: builds an IPA, uploads it to App Store Connect and submits it to **TestFlight**. Available to internal testers right away; external testers need Apple's (usually quick) beta review.
+
+#### `--target production` — what happens
+
+This uploads the build to the production track/App Store, but **does not
+publish it live** — the final "make it public" step is manual, on purpose,
+so a script can never accidentally ship to real users.
+
+- **Android**: uploads the AAB to the Play Console **production** track with
+  `release_status: draft`. It sits there until you go to Play Console →
+  Production → Review release → **Start rollout to production**.
+- **iOS**: uploads the IPA to App Store Connect with `submit_for_review:
+  false` and `automatic_release: false`. The build appears in App Store
+  Connect but is never submitted for review automatically. You attach it to
+  a version and hit **Submit for Review** yourself.
+
+So `torchinlane deploy --target production` gets the binary in front of
+Apple/Google, but you still press the final button in each store's
+dashboard.
 
 ### `torchinlane bump`
 
