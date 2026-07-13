@@ -101,7 +101,8 @@ platform :ios do
       automatic_release: false,
       force: true,
       skip_metadata: true,
-      skip_screenshots: true
+      skip_screenshots: true,
+      skip_app_version_update: true
     }
 
     deliver_options[:release_notes] = release_notes if !skip_release_notes && !release_notes.empty?
@@ -313,7 +314,8 @@ const exportOptionsPlistTemplate = '''<?xml version="1.0" encoding="UTF-8"?>
 
 /// Renders a template, replacing {{key}} placeholders and stripping/keeping
 /// {{#flag}}...{{/flag}} blocks based on [flags].
-String renderTemplate(String template, Map<String, String> values, {Map<String, bool> flags = const {}}) {
+String renderTemplate(String template, Map<String, String> values,
+    {Map<String, bool> flags = const {}}) {
   var result = template;
 
   for (final entry in flags.entries) {
@@ -326,7 +328,8 @@ String renderTemplate(String template, Map<String, String> values, {Map<String, 
       if (closeIndex == -1) break;
       final inner = result.substring(openIndex + openTag.length, closeIndex);
       final replacement = entry.value ? inner : '';
-      result = result.replaceRange(openIndex, closeIndex + closeTag.length, replacement);
+      result = result.replaceRange(
+          openIndex, closeIndex + closeTag.length, replacement);
     }
   }
 
