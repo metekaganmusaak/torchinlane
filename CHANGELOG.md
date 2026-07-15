@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.9
+
+- Add `torchinlane update`. After upgrading the CLI (`dart pub global activate torchinlane`), run `torchinlane update` in your project to re-apply the current templates. It reads `torchinlane.yaml`, re-renders the generated files (iOS/Android Fastfiles + Appfiles, `fastlane/ChangelogHelper.rb`, `scripts/build.sh`), shows a line diff for each changed file, and asks per file before writing — `-y` applies all, `--dry-run` only reports. Every overwritten file is backed up as `<file>.bak` (now gitignored). User-owned files (`ExportOptions.plist`, release notes, `torchinlane.yaml`) are never touched. For a full clean regeneration instead, use `torchinlane init --force`.
+
+## 0.1.8
+
+- Add an interactive build & deploy script. `torchinlane init` now writes `scripts/build.sh` to the project root (executable). Run `sh scripts/build.sh` instead of remembering CLI flags: it prompts for platforms (Android/iOS), only-upload mode, target (Internal/Production), a version bump, deep clean, and English release notes. The version prompt shows the exact resulting version for each choice (patch/minor/major/build/skip) before you pick, then runs `torchinlane bump`. Builds are always obfuscated with split debug info; iOS builds verify dSYMs for Crashlytics. Release notes are cleared before each run so a stale note is never shipped, translated to all configured locales when `ANTHROPIC_API_KEY` is set (empty notes are allowed), then cleared again after a successful upload. `torchinlane uninstall` removes the script.
+- Fix `deliver` crashing with `Malformed version number string` during `torchinlane deploy --platform ios`. The generated iOS `release` lane now passes `skip_app_version_update: true`, so deliver no longer parses live App Store Connect version strings (a badly-named existing version like `1.0.3 + 13` no longer aborts the upload).
+
+## 0.1.7
+
+- Fix ios pre-check problem
+
 ## 0.1.6
 
 - Tiny fix in Apple versioning.

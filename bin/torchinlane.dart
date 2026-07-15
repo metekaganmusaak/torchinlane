@@ -9,6 +9,7 @@ import 'package:torchinlane/src/commands/doctor_command.dart';
 import 'package:torchinlane/src/commands/init_command.dart';
 import 'package:torchinlane/src/commands/screenshots_command.dart';
 import 'package:torchinlane/src/commands/uninstall_command.dart';
+import 'package:torchinlane/src/commands/update_command.dart';
 
 Future<void> main(List<String> arguments) async {
   final runner = CommandRunner<int>(
@@ -21,6 +22,7 @@ Future<void> main(List<String> arguments) async {
     ..addCommand(DoctorCommand())
     ..addCommand(ChangelogCommand())
     ..addCommand(ScreenshotsCommand())
+    ..addCommand(UpdateCommand())
     ..addCommand(UninstallCommand());
 
   try {

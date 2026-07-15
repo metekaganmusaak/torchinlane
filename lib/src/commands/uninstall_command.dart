@@ -33,6 +33,7 @@ class UninstallCommand extends Command<int> {
       Directory('$root/android/fastlane'),
       Directory('$root/fastlane'),
       File('$root/ios/ExportOptions.plist'),
+      File('$root/scripts/build.sh'),
       project.torchinlaneConfigFile,
     ].where((e) => e.existsSync()).toList();
 

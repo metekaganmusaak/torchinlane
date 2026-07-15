@@ -27,6 +27,14 @@ is found:
 export PATH="$PATH:$HOME/.pub-cache/bin"
 ```
 
+To upgrade later, re-run the activate command, then sync your project's
+scaffold files with `torchinlane update`:
+
+```bash
+dart pub global activate torchinlane
+torchinlane update
+```
+
 ## Usage
 
 Run inside any Flutter project (needs `pubspec.yaml`, `ios/`, `android/`).
@@ -50,16 +58,87 @@ prints:
 
 Both paths are added to `.gitignore` automatically.
 
+`init` also writes an executable **`scripts/build.sh`** — an interactive,
+menu-driven wrapper for the whole build+deploy flow (see below).
+
+### `scripts/build.sh` — interactive build & deploy
+
+Instead of remembering `torchinlane deploy` flags, run the generated script
+from your project root:
+
+```bash
+sh scripts/build.sh
+```
+
+It walks you through the release step by step, in this order:
+
+1. **Only-upload mode** — skip building and just upload the AAB/IPA already in
+   `build/` (for retrying a failed upload).
+2. **Platforms** — build Android, iOS, or both.
+3. **Upload + target** — whether to upload, and to Internal (TestFlight / Play
+   Internal testing) or Production (App Store / Play production).
+4. **Release notes** — type your English (source-locale) notes right in the
+   terminal, ending with an empty line. The previous notes are **cleared
+   first** so a stale note is never shipped. An **empty note is allowed** (the
+   stores keep their current text). If `ANTHROPIC_API_KEY` is set, the notes
+   are **translated into every configured locale**; otherwise only the source
+   note ships. Notes are cleared again after a successful upload.
+5. **Version bump** — shows the exact resulting version for each choice before
+   you pick, then runs `torchinlane bump`:
+
+   ```text
+   Version bump — current: 0.1.7
+     1) patch  -> 0.1.8+1   (bug fix; z+1, build+1)
+     2) minor  -> 0.2.0+1   (new feature; y+1, z=0, build+1)
+     3) major  -> 1.0.0+1   (breaking change; x+1, y=z=0, build+1)
+     4) build  -> 0.1.7+1   (same version, build+1 — re-upload)
+     5) skip   -> 0.1.7   (no change)
+   ```
+
+6. **Deep clean** — optionally wipe native caches (`.gradle`, Pods,
+   DerivedData) before building.
+
+Builds are always **obfuscated** with `--split-debug-info` (symbol maps kept
+in `build/debug-info`), and iOS builds verify that **dSYMs** were generated so
+Crashlytics symbolication works. Uploads go through the fastlane lanes that
+`init` scaffolded.
+
 ### `torchinlane uninstall`
 
 Removes everything `torchinlane init` created — `ios/fastlane/`,
-`android/fastlane/`, `fastlane/`, `ios/ExportOptions.plist`, and
-`torchinlane.yaml`. Leaves `changelogs/` untouched.
+`android/fastlane/`, `fastlane/`, `ios/ExportOptions.plist`,
+`scripts/build.sh`, and `torchinlane.yaml`. Leaves `changelogs/` untouched.
 
 ```bash
 torchinlane uninstall          # asks for confirmation
 torchinlane uninstall --yes    # skip confirmation
 ```
+
+### `torchinlane update`
+
+After you upgrade the CLI itself:
+
+```bash
+dart pub global activate torchinlane   # get the latest CLI
+torchinlane update                     # re-apply its templates to this project
+```
+
+`update` reads your `torchinlane.yaml` and re-renders the generated files —
+iOS/Android Fastfiles + Appfiles, `fastlane/ChangelogHelper.rb`, and
+`scripts/build.sh` — so a project picks up template fixes shipped in a newer
+CLI version. For each file that changed it prints a line diff and asks before
+writing; every overwritten file is backed up as `<file>.bak` (gitignored).
+User-owned files (`ios/ExportOptions.plist`, your release notes, and
+`torchinlane.yaml`) are never touched.
+
+```bash
+torchinlane update            # diff + confirm each changed file
+torchinlane update -y         # apply all changes without prompting
+torchinlane update --dry-run  # show what would change, write nothing
+```
+
+For a full clean regeneration instead (overwrites everything, re-asks the
+prompts), use `torchinlane init --force`.
 
 ### `torchinlane deploy`
 

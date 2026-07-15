@@ -9,6 +9,49 @@ class FastlaneScaffolder {
 
   final FlutterProject project;
 
+  /// Files whose contents are fully generated from templates + config, so
+  /// `torchinlane update` can safely re-render and diff them. Keyed by path
+  /// relative to the project root. Does NOT include one-time/user-owned files
+  /// (ExportOptions.plist, release notes, torchinlane.yaml).
+  Map<String, String> managedFiles({
+    required String appName,
+    required IosConfig ios,
+    required AndroidConfig android,
+    required String sourceLocale,
+  }) {
+    return {
+      'ios/fastlane/Appfile': renderTemplate(iosAppfileTemplate, {
+        'bundle_id': ios.bundleId,
+        'apple_id': ios.appleId,
+        'itc_team_id': ios.itcTeamId,
+        'team_id': ios.teamId,
+      }),
+      'ios/fastlane/Fastfile': renderTemplate(
+        iosFastfileTemplate,
+        {
+          'asc_key_id': ios.ascKeyId,
+          'asc_issuer_id': ios.ascIssuerId,
+          'source_locale': sourceLocale,
+        },
+        flags: {'firebase': ios.firebaseCrashlytics},
+      ),
+      'android/fastlane/Appfile': renderTemplate(androidAppfileTemplate, {
+        'service_account_json': _relativeToAndroidDir(android.serviceAccountJson),
+        'package_name': android.packageName,
+      }),
+      'android/fastlane/Fastfile': androidFastfileTemplate,
+      'fastlane/ChangelogHelper.rb': changelogHelperTemplate,
+      'scripts/build.sh': renderTemplate(buildScriptTemplate, {
+        'app_name': appName,
+        'source_locale': sourceLocale,
+        'changelogs_dir': 'changelogs',
+      }),
+    };
+  }
+
+  /// The subset of [managedFiles] paths that must be executable.
+  static const executablePaths = {'scripts/build.sh'};
+
   void scaffold({
     required String appName,
     required IosConfig ios,
@@ -17,31 +60,17 @@ class FastlaneScaffolder {
   }) {
     final root = project.root.path;
 
-    _write('$root/ios/fastlane/Appfile', renderTemplate(iosAppfileTemplate, {
-      'bundle_id': ios.bundleId,
-      'apple_id': ios.appleId,
-      'itc_team_id': ios.itcTeamId,
-      'team_id': ios.teamId,
-    }));
-
-    _write('$root/ios/fastlane/Fastfile', renderTemplate(
-      iosFastfileTemplate,
-      {
-        'asc_key_id': ios.ascKeyId,
-        'asc_issuer_id': ios.ascIssuerId,
-        'source_locale': sourceLocale,
-      },
-      flags: {'firebase': ios.firebaseCrashlytics},
-    ));
-
-    _write('$root/android/fastlane/Appfile', renderTemplate(androidAppfileTemplate, {
-      'service_account_json': _relativeToAndroidDir(android.serviceAccountJson),
-      'package_name': android.packageName,
-    }));
-
-    _write('$root/android/fastlane/Fastfile', androidFastfileTemplate);
-
-    _write('$root/fastlane/ChangelogHelper.rb', changelogHelperTemplate);
+    final files = managedFiles(
+      appName: appName,
+      ios: ios,
+      android: android,
+      sourceLocale: sourceLocale,
+    );
+    files.forEach((rel, content) {
+      final path = '$root/$rel';
+      _write(path, content);
+      if (executablePaths.contains(rel)) _makeExecutable(path);
+    });
 
     final exportOptions = File('$root/ios/ExportOptions.plist');
     if (!exportOptions.existsSync()) {
@@ -79,6 +108,11 @@ class FastlaneScaffolder {
     file.writeAsStringSync(content);
   }
 
+  void _makeExecutable(String path) {
+    if (Platform.isWindows) return;
+    Process.runSync('chmod', ['+x', path]);
+  }
+
   void _updateGitignore(String root, IosConfig ios, AndroidConfig android) {
     final gitignore = File('$root/.gitignore');
     final entries = <String>[
@@ -86,6 +120,7 @@ class FastlaneScaffolder {
       android.serviceAccountJson,
       '**/fastlane/report.xml',
       '**/fastlane/README.md',
+      '**/*.bak',
     ];
 
     final existing = gitignore.existsSync() ? gitignore.readAsStringSync() : '';

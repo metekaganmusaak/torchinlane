@@ -73,6 +73,7 @@ class InitCommand extends Command<int> {
     _logger.info('  1. Place your App Store Connect API key at: ${ios.ascKeyPath}');
     _logger.info('  2. Place your Google Play service account JSON at: ${android.serviceAccountJson}');
     _logger.info('  3. Run `torchinlane doctor` to verify your setup.');
+    _logger.info('  4. Build & deploy interactively with: sh scripts/build.sh');
 
     return 0;
   }
