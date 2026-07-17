@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- Fix iOS deploy reporting failure after a successful build and store upload. The generated iOS `upload_dsyms_to_crashlytics` lane called `upload_symbols_to_crashlytics` unconditionally, which raises (`Failed to find Fabric's upload_symbols binary`) when Firebase Crashlytics is selected but not fully configured (missing `GoogleService-Info.plist` or the `FirebaseCrashlytics` pod) — crashing the whole lane even though TestFlight/App Store upload already succeeded. The lane now checks for the `upload-symbols` binary and `GoogleService-Info.plist` first, prints a clear "skipping dSYM upload" notice and exits gracefully if either is missing, and passes `binary_path` explicitly when present.
+
 ## 0.1.9
 
 - Add `torchinlane update`. After upgrading the CLI (`dart pub global activate torchinlane`), run `torchinlane update` in your project to re-apply the current templates. It reads `torchinlane.yaml`, re-renders the generated files (iOS/Android Fastfiles + Appfiles, `fastlane/ChangelogHelper.rb`, `scripts/build.sh`), shows a line diff for each changed file, and asks per file before writing — `-y` applies all, `--dry-run` only reports. Every overwritten file is backed up as `<file>.bak` (now gitignored). User-owned files (`ExportOptions.plist`, release notes, `torchinlane.yaml`) are never touched. For a full clean regeneration instead, use `torchinlane init --force`.

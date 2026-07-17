@@ -55,28 +55,48 @@ platform :ios do
     zipped_dsym_path = File.expand_path("../../../build/ios/dSYMs.zip", __FILE__)
     gsp_path = File.expand_path("../../Runner/GoogleService-Info.plist", __FILE__)
 
-    if File.directory?(dsym_directory)
-      dsym_files = Dir.glob("#{dsym_directory}/*.dSYM")
+    # Firebase Crashlytics not fully configured (missing GoogleService-Info.plist
+    # or FirebaseCrashlytics pod) => skip dSYM upload instead of failing the lane.
+    # Build + store upload already succeeded at this point.
+    upload_symbols_binary = Dir.glob(
+      File.expand_path("../../Pods/FirebaseCrashlytics/upload-symbols", __FILE__)
+    ).first
 
-      if dsym_files.empty?
-        UI.error("dSYM files not found: #{dsym_directory}")
-      else
-        UI.success("Found #{dsym_files.count} dSYM files")
-        sh "cd \\"#{dsym_directory}\\" && zip -r \\"#{zipped_dsym_path}\\" *.dSYM"
-
-        if File.exist?(zipped_dsym_path)
-          upload_symbols_to_crashlytics(
-            gsp_path: gsp_path,
-            dsym_path: zipped_dsym_path
-          )
-          UI.success("dSYMs uploaded to Firebase Crashlytics")
-        else
-          UI.error("Failed to create dSYM zip")
-        end
-      end
-    else
-      UI.error("dSYM directory not found: #{dsym_directory}")
+    unless File.exist?(gsp_path)
+      UI.important("GoogleService-Info.plist not found - Firebase Crashlytics not configured. Skipping dSYM upload.")
+      next
     end
+
+    if upload_symbols_binary.nil?
+      UI.important("Firebase Crashlytics upload-symbols binary not found (FirebaseCrashlytics pod missing). Skipping dSYM upload.")
+      next
+    end
+
+    unless File.directory?(dsym_directory)
+      UI.important("dSYM directory not found: #{dsym_directory}. Skipping dSYM upload.")
+      next
+    end
+
+    dsym_files = Dir.glob("#{dsym_directory}/*.dSYM")
+    if dsym_files.empty?
+      UI.important("No dSYM files in #{dsym_directory}. Skipping dSYM upload.")
+      next
+    end
+
+    UI.success("Found #{dsym_files.count} dSYM files")
+    sh "cd \\"#{dsym_directory}\\" && zip -r \\"#{zipped_dsym_path}\\" *.dSYM"
+
+    unless File.exist?(zipped_dsym_path)
+      UI.important("Failed to create dSYM zip. Skipping dSYM upload.")
+      next
+    end
+
+    upload_symbols_to_crashlytics(
+      gsp_path: gsp_path,
+      dsym_path: zipped_dsym_path,
+      binary_path: upload_symbols_binary
+    )
+    UI.success("dSYMs uploaded to Firebase Crashlytics")
   end
 {{/firebase}}
 
