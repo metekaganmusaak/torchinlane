@@ -45,6 +45,8 @@ class FastlaneScaffolder {
         'app_name': appName,
         'source_locale': sourceLocale,
         'changelogs_dir': 'changelogs',
+        'ios_firebase_app_id': ios.firebaseAppId,
+        'android_firebase_app_id': android.firebaseAppId,
       }),
     };
   }
@@ -121,6 +123,7 @@ class FastlaneScaffolder {
       '**/fastlane/report.xml',
       '**/fastlane/README.md',
       '**/*.bak',
+      'build/debug-info-archive/',
     ];
 
     final existing = gitignore.existsSync() ? gitignore.readAsStringSync() : '';

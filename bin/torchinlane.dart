@@ -10,8 +10,11 @@ import 'package:torchinlane/src/commands/init_command.dart';
 import 'package:torchinlane/src/commands/screenshots_command.dart';
 import 'package:torchinlane/src/commands/uninstall_command.dart';
 import 'package:torchinlane/src/commands/update_command.dart';
+import 'package:torchinlane/src/shell/version_check.dart';
 
 Future<void> main(List<String> arguments) async {
+  await const VersionCheck().run();
+
   final runner = CommandRunner<int>(
     'torchinlane',
     'Scaffold fastlane, deploy Flutter apps, translate changelogs, and generate store screenshot prompts.',

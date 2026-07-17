@@ -19,6 +19,7 @@ class IosConfig {
     required this.ascIssuerId,
     required this.ascKeyPath,
     required this.firebaseCrashlytics,
+    this.firebaseAppId = '',
   });
 
   final String bundleId;
@@ -29,13 +30,25 @@ class IosConfig {
   final String ascIssuerId;
   final String ascKeyPath;
   final bool firebaseCrashlytics;
+
+  /// Firebase App ID (e.g. 1:123:ios:abc). When set, the build script uploads
+  /// Flutter `--split-debug-info` symbols to Crashlytics automatically. Empty
+  /// means symbols are only archived locally for manual `flutter symbolize`.
+  final String firebaseAppId;
 }
 
 class AndroidConfig {
-  AndroidConfig({required this.packageName, required this.serviceAccountJson});
+  AndroidConfig({
+    required this.packageName,
+    required this.serviceAccountJson,
+    this.firebaseAppId = '',
+  });
 
   final String packageName;
   final String serviceAccountJson;
+
+  /// Firebase App ID (e.g. 1:123:android:abc). See [IosConfig.firebaseAppId].
+  final String firebaseAppId;
 }
 
 class ChangelogsConfig {
@@ -81,11 +94,13 @@ class TorchinlaneConfig {
         ascIssuerId: iosMap['asc_issuer_id'] as String,
         ascKeyPath: (iosMap['asc_key_path'] as String?) ?? 'ios/fastlane/api_key.p8',
         firebaseCrashlytics: (iosMap['firebase_crashlytics'] as bool?) ?? false,
+        firebaseAppId: (iosMap['firebase_app_id'] as String?) ?? '',
       ),
       android: AndroidConfig(
         packageName: androidMap['package_name'] as String,
         serviceAccountJson: (androidMap['service_account_json'] as String?) ??
             'android/fastlane/fastlane-service-account.json',
+        firebaseAppId: (androidMap['firebase_app_id'] as String?) ?? '',
       ),
       changelogs: ChangelogsConfig(
         dir: (changelogsMap?['dir'] as String?) ?? 'changelogs',
@@ -118,9 +133,11 @@ ios:
   asc_issuer_id: ${ios.ascIssuerId}
   asc_key_path: ${ios.ascKeyPath}
   firebase_crashlytics: ${ios.firebaseCrashlytics}
+  firebase_app_id: ${ios.firebaseAppId}
 android:
   package_name: ${android.packageName}
   service_account_json: ${android.serviceAccountJson}
+  firebase_app_id: ${android.firebaseAppId}
 changelogs:
   dir: $changelogsDir
   source_locale: $sourceLocale

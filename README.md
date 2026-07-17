@@ -27,13 +27,25 @@ is found:
 export PATH="$PATH:$HOME/.pub-cache/bin"
 ```
 
-To upgrade later, re-run the activate command, then sync your project's
-scaffold files with `torchinlane update`:
+### Upgrading to a new version
+
+> **Important:** upgrading the CLI does **not** touch already-scaffolded
+> projects. When a new torchinlane version ships, each existing project must run
+> `torchinlane update` to pick up template changes (new `scripts/build.sh`
+> steps, Fastfile fixes, etc.). Skipping it means your project keeps running the
+> old generated files.
 
 ```bash
-dart pub global activate torchinlane
-torchinlane update
+dart pub global activate torchinlane   # 1. upgrade the CLI itself
+torchinlane update                     # 2. run inside each project to re-sync
 ```
+
+`update` never overwrites your own files (`torchinlane.yaml`, release notes,
+`ExportOptions.plist`) and backs up every changed file as `*.bak`.
+
+**First-time users don't need `update`.** A fresh `torchinlane init` always
+generates from the current version's templates, so every change is already
+included. `update` only matters for projects scaffolded by an older CLI.
 
 ## Usage
 

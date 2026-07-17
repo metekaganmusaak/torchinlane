@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.11
+
+- Automate Flutter symbol handling for obfuscated builds. The generated `scripts/build.sh` now, after each Android and iOS build, archives the `--split-debug-info` symbols per version to `build/debug-info-archive/<version>/` (so they survive `flutter clean`) and, when a Firebase App ID is configured, uploads them to Crashlytics via `firebase crashlytics:symbols:upload` — so obfuscated Dart crash reports symbolicate automatically. Without a Firebase App ID it archives only and prints the exact `flutter symbolize` command for manual de-obfuscation. Two optional config fields were added — `ios.firebase_app_id` and `android.firebase_app_id` (also promptable in `torchinlane init`, overridable via `IOS_FIREBASE_APP_ID` / `ANDROID_FIREBASE_APP_ID` env vars). Existing projects: run `torchinlane update` to pick up the new build script.
+- Add an automatic update notice. Every `torchinlane` command now checks pub.dev for a newer release and, if one exists, prints a non-blocking warning telling you to run `dart pub global activate torchinlane` then `torchinlane update`. The check is cached for 24h (`~/.torchinlane/version_check.json`), times out fast, fails silently offline, and can be disabled with `TORCHINLANE_SKIP_VERSION_CHECK=1`.
+
 ## 0.1.10
 
 - Fix iOS deploy reporting failure after a successful build and store upload. The generated iOS `upload_dsyms_to_crashlytics` lane called `upload_symbols_to_crashlytics` unconditionally, which raises (`Failed to find Fabric's upload_symbols binary`) when Firebase Crashlytics is selected but not fully configured (missing `GoogleService-Info.plist` or the `FirebaseCrashlytics` pod) — crashing the whole lane even though TestFlight/App Store upload already succeeded. The lane now checks for the `upload-symbols` binary and `GoogleService-Info.plist` first, prints a clear "skipping dSYM upload" notice and exits gracefully if either is missing, and passes `binary_path` explicitly when present.

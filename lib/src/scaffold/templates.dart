@@ -352,7 +352,46 @@ cd "$ROOT_DIR" || exit 1
 SOURCE_LOCALE="{{source_locale}}"
 CHANGELOGS_DIR="{{changelogs_dir}}"
 
+# Firebase App IDs for Crashlytics symbol upload. Empty => symbols are only
+# archived locally (use `flutter symbolize` manually). Env vars override config.
+IOS_FIREBASE_APP_ID="${IOS_FIREBASE_APP_ID:-{{ios_firebase_app_id}}}"
+ANDROID_FIREBASE_APP_ID="${ANDROID_FIREBASE_APP_ID:-{{android_firebase_app_id}}}"
+
 printf "${YELLOW}--- {{app_name}} Build Script ---${NC}\n"
+
+# Archive Flutter split-debug-info symbols per version (build/ gets wiped by
+# `flutter clean`, so keep a copy), then upload to Crashlytics if configured.
+# Args: <platform-label> <firebase-app-id>
+handle_symbols() {
+    _label="$1"
+    _app_id="$2"
+
+    if [ ! -d "$DEBUG_INFO_DIR" ] || [ -z "$(ls -A "$DEBUG_INFO_DIR" 2>/dev/null)" ]; then
+        printf "${YELLOW}No symbols in $DEBUG_INFO_DIR ($_label); skipping.${NC}\n"
+        return 0
+    fi
+
+    _archive="build/debug-info-archive/$VERSION"
+    mkdir -p "$_archive"
+    cp -R "$DEBUG_INFO_DIR/." "$_archive/" 2>/dev/null
+    printf "${GREEN}Symbols archived: $_archive ($_label)${NC}\n"
+
+    if [ -n "$_app_id" ] && command -v firebase >/dev/null 2>&1; then
+        printf "${YELLOW}Uploading $_label symbols to Crashlytics...${NC}\n"
+        if firebase crashlytics:symbols:upload --app="$_app_id" "$DEBUG_INFO_DIR"; then
+            printf "${GREEN}$_label symbols uploaded to Crashlytics.${NC}\n"
+        else
+            printf "${YELLOW}WARNING: $_label symbol upload failed; symbols kept in $_archive.${NC}\n"
+        fi
+    else
+        if [ -z "$_app_id" ]; then
+            printf "${YELLOW}No Firebase App ID for $_label; symbols archived only.${NC}\n"
+        else
+            printf "${YELLOW}firebase CLI not found; $_label symbols archived only.${NC}\n"
+        fi
+        printf "${YELLOW}Manual de-obfuscation: flutter symbolize -i <stack.txt> -d $_archive/<arch>.symbols${NC}\n"
+    fi
+}
 
 ask_yes_no() {
     while true; do
@@ -531,6 +570,7 @@ if [ "$BUILD_ANDROID" = true ]; then
             printf "${RED}ERROR: Android build failed.${NC}\n"; exit 1
         fi
         printf "${GREEN}Android build OK.${NC}\n"
+        handle_symbols "Android" "$ANDROID_FIREBASE_APP_ID"
     fi
     if [ "$SHOULD_UPLOAD" = true ]; then
         if [ -f "build/app/outputs/bundle/release/app-release.aab" ]; then
@@ -565,6 +605,7 @@ if [ "$BUILD_IOS" = true ]; then
         else
             printf "${YELLOW}WARNING: no dSYMs found. Crashlytics symbolication may be incomplete.${NC}\n"
         fi
+        handle_symbols "iOS" "$IOS_FIREBASE_APP_ID"
     fi
     if [ "$SHOULD_UPLOAD" = true ]; then
         IPA_PATH=$(ls build/ios/ipa/*.ipa 2>/dev/null | head -n 1)

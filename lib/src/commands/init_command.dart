@@ -45,10 +45,17 @@ class InitCommand extends Command<int> {
     final ascIssuerId = ask('App Store Connect API Issuer ID');
     const ascKeyPath = 'ios/fastlane/api_key.p8';
     final firebaseCrashlytics = askYesNo('Upload dSYMs to Firebase Crashlytics?');
+    final iosFirebaseAppId = firebaseCrashlytics
+        ? ask('iOS Firebase App ID for symbol upload (e.g. 1:123:ios:abc, blank to skip)',
+            defaultValue: '')
+        : '';
 
     _logger.info('\n--- Android ---');
     final packageName = ask('Android package name (e.g. com.company.app)');
     const serviceAccountJson = 'android/fastlane/fastlane-service-account.json';
+    final androidFirebaseAppId = ask(
+        'Android Firebase App ID for symbol upload (e.g. 1:123:android:abc, blank to skip)',
+        defaultValue: '');
 
     _logger.info('\n--- Changelogs ---');
     final sourceLocale = ask('Source locale for changelog translation', defaultValue: 'en');
@@ -62,8 +69,13 @@ class InitCommand extends Command<int> {
       ascIssuerId: ascIssuerId,
       ascKeyPath: ascKeyPath,
       firebaseCrashlytics: firebaseCrashlytics,
+      firebaseAppId: iosFirebaseAppId,
     );
-    final android = AndroidConfig(packageName: packageName, serviceAccountJson: serviceAccountJson);
+    final android = AndroidConfig(
+      packageName: packageName,
+      serviceAccountJson: serviceAccountJson,
+      firebaseAppId: androidFirebaseAppId,
+    );
 
     final scaffolder = FastlaneScaffolder(project);
     scaffolder.scaffold(appName: appName, ios: ios, android: android, sourceLocale: sourceLocale);
