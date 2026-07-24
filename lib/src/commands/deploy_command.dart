@@ -1,11 +1,10 @@
-import 'dart:io';
-
 import 'package:args/command_runner.dart';
 
 import '../config/torchinlane_config.dart';
 import '../project/flutter_project.dart';
 import '../shell/logger.dart';
 import '../shell/process_runner.dart';
+import '../shell/toolchain.dart';
 
 class DeployCommand extends Command<int> {
   DeployCommand({Logger logger = const Logger()}) : _logger = logger {
@@ -54,6 +53,8 @@ class DeployCommand extends Command<int> {
       _logger.error('--platform must include ios and/or android.');
       return 1;
     }
+
+    if (!dryRun && !await _preflightTools(buildIos: buildIos)) return 1;
 
     final root = project.root.path;
     final env = skipReleaseNotes ? {'FASTLANE_SKIP_RELEASE_NOTES': '1'} : <String, String>{};
@@ -124,15 +125,44 @@ class DeployCommand extends Command<int> {
     return 0;
   }
 
+  /// Verifies the Ruby gems this deploy will shell out to, offering to install
+  /// or repair them before a long build burns time and then fails at the
+  /// `pod install` / `fastlane` step.
+  Future<bool> _preflightTools({required bool buildIos}) async {
+    final toolchain = Toolchain(logger: _logger);
+    final needed = [
+      RubyGem.fastlane,
+      if (buildIos) RubyGem.cocoapods,
+    ];
+
+    for (final gem in needed) {
+      var report = toolchain.inspect(gem);
+      if (report.usable) continue;
+
+      _logger.error('${report.summary}.');
+      report = await toolchain.ensure(gem);
+      if (!report.usable) {
+        _logger.error(
+            'Cannot continue without ${gem.gemName}. Run `torchinlane doctor --fix`.');
+        return false;
+      }
+    }
+    return true;
+  }
+
   Future<bool> _runSteps(List<_Step> steps, {required bool dryRun}) async {
     for (final step in steps) {
       _logger.info('\$ ${step.executable} ${step.arguments.join(' ')}${step.cwd != null ? '  (in ${step.cwd})' : ''}');
       if (dryRun) continue;
 
-      final result = await runStreamed(step.executable, step.arguments, workingDirectory: step.cwd, environment: {
-        ...Platform.environment,
-        ...step.env,
-      });
+      // Augmented PATH so a gem installed moments ago in preflight resolves
+      // without the user first reloading their shell.
+      final result = await runStreamed(
+        step.executable,
+        step.arguments,
+        workingDirectory: step.cwd,
+        environment: Toolchain(logger: _logger).augmentedEnvironment(step.env),
+      );
       if (!result.success) {
         _logger.error('Step failed: ${step.executable} ${step.arguments.join(' ')} (exit ${result.exitCode})');
         return false;

@@ -5,11 +5,19 @@ import 'package:args/command_runner.dart';
 import '../config/torchinlane_config.dart';
 import '../project/flutter_project.dart';
 import '../shell/logger.dart';
+import '../shell/toolchain.dart';
 
 class DoctorCommand extends Command<int> {
-  DoctorCommand({Logger logger = const Logger()}) : _logger = logger;
+  DoctorCommand({Logger logger = const Logger()}) : _logger = logger {
+    argParser.addFlag(
+      'fix',
+      help: 'Install or repair missing tools (fastlane, CocoaPods) and fix PATH.',
+      negatable: false,
+    );
+  }
 
   final Logger _logger;
+  Toolchain get _toolchain => Toolchain(logger: _logger);
 
   @override
   String get name => 'doctor';
@@ -20,10 +28,14 @@ class DoctorCommand extends Command<int> {
   @override
   Future<int> run() async {
     var ok = true;
+    final fix = argResults!['fix'] as bool;
 
     ok &= _checkBinary('flutter');
-    ok &= _checkBinary('fastlane');
     ok &= _checkBinary('ruby');
+    ok &= await _checkGem(RubyGem.fastlane, fix: fix);
+    // CocoaPods is only used for iOS builds, so its absence is not fatal on a
+    // machine that never builds iOS (Linux/Windows, Android-only projects).
+    ok &= await _checkGem(RubyGem.cocoapods, fix: fix, required: Platform.isMacOS);
 
     final project = FlutterProject.findRoot();
     if (project == null) {
@@ -70,6 +82,22 @@ class DoctorCommand extends Command<int> {
       _logger.error('\nSome checks failed. See above.');
     }
     return ok ? 0 : 1;
+  }
+
+  /// Reports on a Ruby gem, repairing it in place when [fix] is set.
+  Future<bool> _checkGem(RubyGem gem,
+      {required bool fix, bool required = true}) async {
+    var report = _toolchain.inspect(gem);
+
+    if (!report.usable && fix) {
+      report = await _toolchain.ensure(gem, assumeYes: true);
+    }
+
+    final passed = _report(report.usable, report.summary, required: required);
+    if (!report.usable && !fix) {
+      _logger.info('  -> run `torchinlane doctor --fix` to install/repair it');
+    }
+    return passed;
   }
 
   bool _checkBinary(String name, {bool required = true}) {

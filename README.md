@@ -9,7 +9,10 @@ marketing prompts.
 
 - Dart SDK `^3.5.0`
 - Flutter project layout (`pubspec.yaml`, `ios/`, `android/`)
-- Ruby + [fastlane](https://fastlane.tools) installed for `deploy` (`gem install fastlane` or via Bundler)
+- Ruby (macOS ships one; `brew install ruby` for a newer version)
+- [fastlane](https://fastlane.tools) and, for iOS builds, CocoaPods — both are
+  installed for you by `torchinlane init`, or later with
+  `torchinlane doctor --fix`
 - `ANTHROPIC_API_KEY` env var for `changelog translate`
 - App Store Connect API key (`.p8`) for iOS deploy/changelog push
 - Google Play service account JSON for Android deploy/changelog push
@@ -289,9 +292,89 @@ torchinlane screenshots prompts   # analyzes the project and writes screenshots/
 
 ### `torchinlane doctor`
 
+Checks everything a deploy needs — the toolchain on your machine and the
+configuration in your project — and can repair the toolchain for you.
+
 ```bash
-torchinlane doctor
+torchinlane doctor         # report only
+torchinlane doctor --fix   # install/repair missing tools, then report
 ```
+
+It verifies, in order:
+
+| Check | Required |
+| --- | --- |
+| `flutter`, `ruby` on `PATH` | yes |
+| `fastlane` installed and runnable | yes |
+| `cocoapods` (`pod`) installed and runnable | on macOS only |
+| Inside a Flutter project, `torchinlane.yaml` present and valid | yes |
+| App Store Connect key at `ios.asc_key_path` | yes |
+| Play service account JSON at `android.service_account_json` | yes |
+| `ios/ExportOptions.plist`, `changelogs/` directory | yes |
+| `ANTHROPIC_API_KEY` set (for `changelog translate` / `screenshots prompts`) | no |
+| `xcrun`, `adb` on `PATH` | no |
+
+A healthy project looks like this — `✓` passed, `~` optional and absent,
+`✗` failed:
+
+```text
+✓ flutter on PATH
+✓ ruby on PATH
+✓ fastlane 2.230.0
+✓ pod 1.16.2
+✓ Flutter project found at /Users/you/dev/myapp
+✓ torchinlane.yaml found
+✓ torchinlane.yaml is valid
+✓ App Store Connect key: ios/fastlane/api_key.p8
+✓ Play service account: android/fastlane/fastlane-service-account.json
+✓ ios/ExportOptions.plist
+✓ changelogs/ directory
+✓ ANTHROPIC_API_KEY set (needed for `changelog translate` / `screenshots prompts`)
+~ xcrun on PATH (optional)
+~ adb on PATH (optional)
+
+All checks passed.
+```
+
+Exit code is `0` when every required check passes, `1` otherwise — so it is
+safe to gate a CI job on it.
+
+#### Toolchain problems it detects and fixes
+
+fastlane and CocoaPods are both Ruby gems, so one broken Ruby setup breaks
+them together. `doctor` reports *why* a tool is unusable rather than just
+"not found", because each cause needs a different fix:
+
+```text
+✗ pod found on PATH but not in a valid state
+  -> run `torchinlane doctor --fix` to install/repair it
+✗ fastlane installed at /Users/you/.gem/ruby/2.6.0/bin but not on PATH
+  -> run `torchinlane doctor --fix` to install/repair it
+```
+
+- **not in a valid state** — the gem is installed but won't execute, usually
+  after a macOS or Xcode upgrade swapped the system Ruby underneath it. This
+  is the cause of the `CocoaPods not installed or not in valid state` error
+  during an iOS build. `--fix` reinstalls the gem.
+- **installed but not on PATH** — the gem exists in a gem bin directory your
+  shell never exported, so `fastlane` appears missing even though it isn't.
+  `--fix` appends that directory to your shell profile.
+- **not installed** — `--fix` installs the latest published version.
+
+`--fix` installs with `gem install --no-document`, and falls back to
+`--user-install` when the active gem directory isn't writable (macOS system
+Ruby) instead of escalating to `sudo`. After installing CocoaPods it runs
+`pod setup` so your first `pod install` doesn't fail on a missing spec repo.
+
+> **Reload your shell after a PATH fix.** A profile export can't change the
+> shell that's already running, so run `source ~/.zshrc` (or open a new
+> terminal) before the new binary is visible to *you*. `torchinlane deploy`
+> itself doesn't need this — it prepends the gem bin directories to `PATH`
+> for the commands it launches.
+
+You rarely need to run `--fix` by hand: `torchinlane init` sets up the
+toolchain during first-time setup, and `torchinlane deploy` verifies it before
+building.
 
 ## Configuration
 
@@ -332,8 +415,15 @@ screenshots:
 
 - **`torchinlane: command not found`** — `~/.pub-cache/bin` is not on `PATH`
   (see Install above).
-- **`torchinlane doctor` fails on fastlane** — install fastlane and confirm
-  `fastlane --version` runs from your project's `ios/` or `android/` dir.
+- **`torchinlane doctor` fails on fastlane or CocoaPods** — run
+  `torchinlane doctor --fix`, which installs what's missing, reinstalls what's
+  broken, and fixes `PATH`. Then reload your shell (`source ~/.zshrc`).
+- **`CocoaPods not installed or not in valid state` during an iOS build** —
+  the gem is installed but can't run, usually after a macOS or Xcode upgrade
+  changed the system Ruby. `torchinlane doctor --fix` reinstalls it.
+- **`fastlane` works in your terminal but `doctor` says it's missing** — its
+  gem bin directory isn't exported on `PATH`. `torchinlane doctor --fix` adds
+  it to your shell profile.
 - **`changelog translate` errors with a missing key** — export
   `ANTHROPIC_API_KEY` in your shell before running the command.
 - **Deploy fails to authenticate with App Store Connect** — verify

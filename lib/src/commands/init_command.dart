@@ -5,10 +5,14 @@ import '../project/flutter_project.dart';
 import '../scaffold/fastlane_scaffolder.dart';
 import '../shell/cli_prompt.dart';
 import '../shell/logger.dart';
+import '../shell/toolchain.dart';
 
 class InitCommand extends Command<int> {
   InitCommand({Logger logger = const Logger()}) : _logger = logger {
-    argParser.addFlag('force', help: 'Overwrite existing fastlane setup.', negatable: false);
+    argParser
+      ..addFlag('force', help: 'Overwrite existing fastlane setup.', negatable: false)
+      ..addFlag('skip-tools',
+          help: 'Do not install/verify fastlane and CocoaPods.', negatable: false);
   }
 
   final Logger _logger;
@@ -31,6 +35,10 @@ class InitCommand extends Command<int> {
     if (project.torchinlaneConfigFile.existsSync() && !force) {
       _logger.info('torchinlane.yaml already exists. Use --force to overwrite.');
       return 0;
+    }
+
+    if (!(argResults!['skip-tools'] as bool)) {
+      await _setupTools();
     }
 
     final defaultAppName = project.readAppName();
@@ -88,6 +96,25 @@ class InitCommand extends Command<int> {
     _logger.info('  4. Build & deploy interactively with: sh scripts/build.sh');
 
     return 0;
+  }
+
+  /// Installs/repairs fastlane and CocoaPods at their latest versions.
+  ///
+  /// Never fatal: scaffolding is still useful on a machine that will not build
+  /// (CI generating config, Linux without CocoaPods), so failures only warn.
+  Future<void> _setupTools() async {
+    _logger.info('--- Toolchain ---');
+    final toolchain = Toolchain(logger: _logger);
+
+    for (final gem in [RubyGem.fastlane, RubyGem.cocoapods]) {
+      final report = await toolchain.ensure(gem);
+      if (report.usable) {
+        _logger.success('✓ ${report.summary}');
+      } else {
+        _logger.error('✗ ${report.summary}');
+        _logger.info('  Fix later with: torchinlane doctor --fix');
+      }
+    }
   }
 }
 
