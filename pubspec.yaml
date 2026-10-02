@@ -1,8 +1,8 @@
 name: torchinlane
 description: >-
-  Global CLI to scaffold fastlane, deploy Flutter apps to TestFlight/App Store
-  and Play Store, translate store changelogs, and generate store screenshot prompts.
-version: 0.1.12
+  Flutter release CLI and local GUI for builds, localized store texts/images,
+  release notes, credentials, signing, and GitHub Actions automation.
+version: 0.2.0
 repository: https://github.com/metekaganmusaak/torchinlane
 topics:
   - flutter
@@ -23,6 +23,7 @@ dependencies:
   yaml_edit: ^2.2.1
   path: ^1.9.0
   http: ^1.2.2
+  image: ^4.10.1
 
 dev_dependencies:
   lints: ^5.0.0
@@ -31,3 +32,5 @@ dev_dependencies:
 screenshots:
   - description: "Torchinlane Package Logo"
     path: assets/logo.png
+  - description: "Torchinlane Studio localized store editor"
+    path: doc/studio.png

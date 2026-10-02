@@ -19,7 +19,9 @@ class ChangelogTranslator {
         _apiKey = apiKey ?? Platform.environment['ANTHROPIC_API_KEY'];
 
   static const _endpoint = 'https://api.anthropic.com/v1/messages';
-  static const _model = 'claude-opus-4-8';
+  String get _model =>
+      Platform.environment['TORCHINLANE_AI_MODEL'] ?? 'claude-sonnet-4-6';
+  void close() => _client.close();
 
   final http.Client _client;
   final String? _apiKey;
@@ -38,7 +40,8 @@ class ChangelogTranslator {
     final results = <String, String>{};
     const batchSize = 8;
     for (var i = 0; i < targetLocales.length; i += batchSize) {
-      final batch = targetLocales.sublist(i, (i + batchSize).clamp(0, targetLocales.length));
+      final batch = targetLocales.sublist(
+          i, (i + batchSize).clamp(0, targetLocales.length));
       final translated = await _translateBatch(
         sourceText: sourceText,
         sourceLocale: sourceLocale,
@@ -89,25 +92,38 @@ $sourceText
       ],
     });
 
-    final response = await _client.post(
-      Uri.parse(_endpoint),
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': _apiKey!,
-        'anthropic-version': '2023-06-01',
-      },
-      body: body,
-    );
+    final response = await _client
+        .post(
+          Uri.parse(_endpoint),
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': _apiKey!,
+            'anthropic-version': '2023-06-01',
+          },
+          body: body,
+        )
+        .timeout(const Duration(seconds: 120));
 
     if (response.statusCode != 200) {
-      throw ChangelogTranslationException('API error ${response.statusCode}: ${response.body}');
+      throw ChangelogTranslationException(
+          'API error ${response.statusCode}; check key/model access.');
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final content = decoded['content'] as List<dynamic>;
-    final textBlock = content.firstWhere((b) => (b as Map)['type'] == 'text') as Map<String, dynamic>;
-    final parsed = jsonDecode(textBlock['text'] as String) as Map<String, dynamic>;
+    final textBlock = content.firstWhere((b) => (b as Map)['type'] == 'text')
+        as Map<String, dynamic>;
+    final parsed =
+        jsonDecode(textBlock['text'] as String) as Map<String, dynamic>;
 
+    if (parsed.length != targetLocales.length ||
+        targetLocales.any((l) =>
+            parsed[l] is! String ||
+            (parsed[l] as String).trim().isEmpty ||
+            (parsed[l] as String).runes.length > 500)) {
+      throw ChangelogTranslationException(
+          'Incomplete or over-limit translation. Nothing written.');
+    }
     return parsed.map((key, value) => MapEntry(key, value as String));
   }
 }

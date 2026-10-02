@@ -42,7 +42,8 @@ class ScreenshotCapture {
   }) async {
     final file = _targetFile('ios', locale, pageName);
     file.parent.createSync(recursive: true);
-    final result = await Process.run('xcrun', ['simctl', 'io', simulatorUdid, 'screenshot', file.path]);
+    final result = await Process.run(
+        'xcrun', ['simctl', 'io', simulatorUdid, 'screenshot', file.path]);
     if (result.exitCode != 0) {
       throw StateError('xcrun simctl screenshot failed: ${result.stderr}');
     }
@@ -62,7 +63,9 @@ class ScreenshotCapture {
   }) async {
     final file = _targetFile('android', locale, pageName);
     file.parent.createSync(recursive: true);
-    final result = await Process.run('adb', ['-s', serial, 'exec-out', 'screencap', '-p']);
+    final result = await Process.run(
+        'adb', ['-s', serial, 'exec-out', 'screencap', '-p'],
+        stdoutEncoding: null);
     if (result.exitCode != 0) {
       throw StateError('adb screencap failed: ${result.stderr}');
     }
@@ -84,11 +87,13 @@ class ScreenshotCapture {
     }
     entries.add(entry.toJson());
     manifestFile.createSync(recursive: true);
-    manifestFile.writeAsStringSync(const JsonEncoder.withIndent('  ').convert(entries));
+    manifestFile
+        .writeAsStringSync(const JsonEncoder.withIndent('  ').convert(entries));
   }
 
   static Future<List<Map<String, String>>> listIosSimulators() async {
-    final result = await Process.run('xcrun', ['simctl', 'list', 'devices', 'booted', '--json']);
+    final result = await Process.run(
+        'xcrun', ['simctl', 'list', 'devices', 'booted', '--json']);
     if (result.exitCode != 0) return [];
     final decoded = jsonDecode(result.stdout as String) as Map<String, dynamic>;
     final devices = <Map<String, String>>[];

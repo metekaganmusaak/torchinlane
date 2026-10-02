@@ -3,10 +3,11 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 
 import '../changelog/translator.dart';
+import '../changelog/locale_maps.dart';
+import '../store/service.dart';
 import '../config/torchinlane_config.dart';
 import '../project/flutter_project.dart';
 import '../shell/logger.dart';
-import '../shell/process_runner.dart';
 
 class ChangelogCommand extends Command<int> {
   ChangelogCommand({Logger logger = const Logger()}) {
@@ -27,7 +28,8 @@ class _TranslateCommand extends Command<int> {
     argParser
       ..addOption('from', help: 'Source locale.')
       ..addOption('text', help: 'Source text (overrides reading from file).')
-      ..addFlag('overwrite', help: 'Overwrite existing non-empty locale files.', negatable: false);
+      ..addFlag('overwrite',
+          help: 'Overwrite existing non-empty locale files.', negatable: false);
   }
 
   final Logger _logger;
@@ -36,7 +38,8 @@ class _TranslateCommand extends Command<int> {
   String get name => 'translate';
 
   @override
-  String get description => 'Translate source changelog into all configured locales via Claude API.';
+  String get description =>
+      'Translate source changelog into all configured locales via Claude API.';
 
   @override
   Future<int> run() async {
@@ -51,7 +54,8 @@ class _TranslateCommand extends Command<int> {
     }
 
     final config = TorchinlaneConfig.load(project.torchinlaneConfigFile);
-    final sourceLocale = (argResults!['from'] as String?) ?? config.changelogs.sourceLocale;
+    final sourceLocale =
+        (argResults!['from'] as String?) ?? config.changelogs.sourceLocale;
     final overwrite = argResults!['overwrite'] as bool;
 
     String sourceText;
@@ -59,19 +63,24 @@ class _TranslateCommand extends Command<int> {
     if (explicitText != null) {
       sourceText = explicitText;
     } else {
-      final sourceFile = File('${project.root.path}/${config.changelogs.dir}/$sourceLocale/release_notes.txt');
-      if (!sourceFile.existsSync() || sourceFile.readAsStringSync().trim().isEmpty) {
-        _logger.error('Source changelog is empty: ${sourceFile.path}. Fill it in or pass --text.');
+      final sourceFile = File(
+          '${project.root.path}/${config.changelogs.dir}/$sourceLocale/release_notes.txt');
+      if (!sourceFile.existsSync() ||
+          sourceFile.readAsStringSync().trim().isEmpty) {
+        _logger.error(
+            'Source changelog is empty: ${sourceFile.path}. Fill it in or pass --text.');
         return 1;
       }
       sourceText = sourceFile.readAsStringSync().trim();
     }
 
-    final targets = config.changelogs.locales.where((l) => l != sourceLocale).toList();
+    final targets =
+        config.changelogs.locales.where((l) => l != sourceLocale).toList();
 
-    _logger.info('Translating from "$sourceLocale" into ${targets.length} locales via Claude API...');
+    _logger.info(
+        'Translating from "$sourceLocale" into ${targets.length} locales via Claude API...');
+    final translator = ChangelogTranslator();
     try {
-      final translator = ChangelogTranslator();
       final translations = await translator.translate(
         sourceText: sourceText,
         sourceLocale: sourceLocale,
@@ -81,8 +90,11 @@ class _TranslateCommand extends Command<int> {
       var written = 0;
       var skipped = 0;
       for (final entry in translations.entries) {
-        final file = File('${project.root.path}/${config.changelogs.dir}/${entry.key}/release_notes.txt');
-        if (file.existsSync() && file.readAsStringSync().trim().isNotEmpty && !overwrite) {
+        final file = File(
+            '${project.root.path}/${config.changelogs.dir}/${entry.key}/release_notes.txt');
+        if (file.existsSync() &&
+            file.readAsStringSync().trim().isNotEmpty &&
+            !overwrite) {
           skipped++;
           continue;
         }
@@ -92,22 +104,35 @@ class _TranslateCommand extends Command<int> {
       }
 
       // Ensure source locale file itself is up to date.
-      final sourceFile = File('${project.root.path}/${config.changelogs.dir}/$sourceLocale/release_notes.txt');
+      final sourceFile = File(
+          '${project.root.path}/${config.changelogs.dir}/$sourceLocale/release_notes.txt');
       sourceFile.createSync(recursive: true);
       sourceFile.writeAsStringSync(sourceText);
 
-      _logger.success('Wrote $written locale files (skipped $skipped already-filled files).');
+      _logger.success(
+          'Wrote $written locale files (skipped $skipped already-filled files).');
       return 0;
-    } on ChangelogTranslationException catch (e) {
+    } catch (e) {
       _logger.error(e.toString());
       return 1;
+    } finally {
+      translator.close();
     }
   }
 }
 
 class _PushCommand extends Command<int> {
   _PushCommand({Logger logger = const Logger()}) : _logger = logger {
-    argParser.addOption('platform', help: 'ios, android, or ios,android', defaultsTo: 'ios,android');
+    argParser
+      ..addOption('platform',
+          help: 'ios, android, or ios,android', defaultsTo: 'ios,android')
+      ..addOption('track',
+          allowed: ['internal', 'alpha', 'beta', 'production'],
+          defaultsTo: 'internal')
+      ..addOption('version-code',
+          help: 'Existing Google Play version code (required for Android).')
+      ..addOption('app-version', help: 'Editable App Store version.')
+      ..addFlag('dry-run', negatable: false);
   }
 
   final Logger _logger;
@@ -116,7 +141,8 @@ class _PushCommand extends Command<int> {
   String get name => 'push';
 
   @override
-  String get description => 'Push release notes to the stores without building/uploading a binary.';
+  String get description =>
+      'Push release notes to the stores without building/uploading a binary.';
 
   @override
   Future<int> run() async {
@@ -126,20 +152,35 @@ class _PushCommand extends Command<int> {
       return 1;
     }
 
-    final platforms = (argResults!['platform'] as String).split(',').map((p) => p.trim()).toSet();
-    final root = project.root.path;
-
-    if (platforms.contains('android')) {
-      _logger.info('Pushing Android release notes...');
-      final result = await runStreamed('fastlane', ['update_release_notes'], workingDirectory: '$root/android');
-      if (!result.success) return result.exitCode;
+    final platforms = parsePlatforms(argResults!['platform'] as String);
+    final code = argResults!['version-code'] as String?;
+    if (platforms.contains('android') &&
+        (code == null || !RegExp(r'^[1-9][0-9]*$').hasMatch(code))) {
+      throw ArgumentError('Android note updates require --version-code.');
     }
-
-    if (platforms.contains('ios')) {
-      _logger.info('Pushing iOS release notes...');
-      final result = await runStreamed('fastlane', ['update_release_notes'], workingDirectory: '$root/ios');
-      if (!result.success) return result.exitCode;
+    if (argResults!['dry-run'] as bool) {
+      _logger.info(
+          'Would update notes on ${platforms.join(',')} track=${argResults!['track']} version=$code');
+      return 0;
     }
+    var failed = false;
+    final service = StoreService(project, log: _logger.info);
+    for (final platform in platforms) {
+      try {
+        final result =
+            await service.lane(platform, 'update_release_notes', env: {
+          'TORCHINLANE_TRACK': argResults!['track'] as String,
+          if (code != null) 'TORCHINLANE_VERSION_CODE': code,
+          if (argResults!['app-version'] != null)
+            'TORCHINLANE_APP_VERSION': argResults!['app-version'] as String,
+        });
+        failed |= result != 0;
+      } catch (e) {
+        failed = true;
+        _logger.error('$platform: $e');
+      }
+    }
+    if (failed) return 1;
 
     _logger.success('Release notes pushed.');
     return 0;
@@ -164,13 +205,16 @@ class _ClearCommand extends Command<int> {
       _logger.error('Not inside a Flutter project.');
       return 1;
     }
-    if (!project.changelogsDir.existsSync()) {
+    final config = TorchinlaneConfig.load(project.torchinlaneConfigFile);
+    final directory =
+        Directory('${project.root.path}/${config.changelogs.dir}');
+    if (!directory.existsSync()) {
       _logger.error('No changelogs directory found.');
       return 1;
     }
 
     var cleared = 0;
-    for (final entity in project.changelogsDir.listSync()) {
+    for (final entity in directory.listSync()) {
       if (entity is! Directory) continue;
       final file = File('${entity.path}/release_notes.txt');
       if (file.existsSync()) {

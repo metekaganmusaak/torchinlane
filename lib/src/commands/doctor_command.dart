@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:args/command_runner.dart';
 
+import '../changelog/locale_maps.dart';
+import '../setup/credentials.dart';
+import '../store/service.dart';
+
 import '../config/torchinlane_config.dart';
 import '../project/flutter_project.dart';
 import '../shell/logger.dart';
@@ -9,11 +13,16 @@ import '../shell/toolchain.dart';
 
 class DoctorCommand extends Command<int> {
   DoctorCommand({Logger logger = const Logger()}) : _logger = logger {
-    argParser.addFlag(
-      'fix',
-      help: 'Install or repair missing tools (fastlane, CocoaPods) and fix PATH.',
-      negatable: false,
-    );
+    argParser
+      ..addFlag('verify-credentials',
+          negatable: false, help: 'Check live store app access.')
+      ..addOption('platform', defaultsTo: 'ios,android')
+      ..addFlag(
+        'fix',
+        help:
+            'Install or repair missing tools (fastlane, CocoaPods) and fix PATH.',
+        negatable: false,
+      );
   }
 
   final Logger _logger;
@@ -29,13 +38,17 @@ class DoctorCommand extends Command<int> {
   Future<int> run() async {
     var ok = true;
     final fix = argResults!['fix'] as bool;
+    final platforms = parsePlatforms(argResults!['platform'] as String);
 
     ok &= _checkBinary('flutter');
     ok &= _checkBinary('ruby');
     ok &= await _checkGem(RubyGem.fastlane, fix: fix);
     // CocoaPods is only used for iOS builds, so its absence is not fatal on a
     // machine that never builds iOS (Linux/Windows, Android-only projects).
-    ok &= await _checkGem(RubyGem.cocoapods, fix: fix, required: Platform.isMacOS);
+    if (platforms.contains('ios')) {
+      ok &= await _checkGem(RubyGem.cocoapods,
+          fix: fix, required: Platform.isMacOS);
+    }
 
     final project = FlutterProject.findRoot();
     if (project == null) {
@@ -53,28 +66,65 @@ class DoctorCommand extends Command<int> {
 
     try {
       final config = TorchinlaneConfig.load(configFile);
+
       _report(true, 'torchinlane.yaml is valid');
 
-      final keyFile = File('${project.root.path}/${config.ios.ascKeyPath}');
-      ok &= _report(keyFile.existsSync(), 'App Store Connect key: ${config.ios.ascKeyPath}');
+      final applePath =
+          Platform.environment['ASC_KEY_PATH'] ?? config.ios.ascKeyPath;
+      final keyFile = File(applePath.startsWith('/')
+          ? applePath
+          : '${project.root.path}/$applePath');
+      if (platforms.contains('ios')) {
+        ok &= _report(keyFile.existsSync(),
+            'App Store Connect key: ${config.ios.ascKeyPath}');
+        if (keyFile.existsSync()) {
+          Credentials.validateContents('ios', keyFile.readAsStringSync());
+        }
+      }
 
-      final serviceAccount = File('${project.root.path}/${config.android.serviceAccountJson}');
-      ok &= _report(serviceAccount.existsSync(), 'Play service account: ${config.android.serviceAccountJson}');
+      final googlePath =
+          Platform.environment['GOOGLE_APPLICATION_CREDENTIALS'] ??
+              config.android.serviceAccountJson;
+      final serviceAccount = File(googlePath.startsWith('/')
+          ? googlePath
+          : '${project.root.path}/$googlePath');
+      if (platforms.contains('android')) {
+        ok &= _report(
+            serviceAccount.existsSync(), 'Google credentials: $googlePath');
+        if (serviceAccount.existsSync()) {
+          Credentials.validateContents(
+              'android', serviceAccount.readAsStringSync());
+        }
+      }
 
-      final exportOptions = File('${project.root.path}/ios/ExportOptions.plist');
-      ok &= _report(exportOptions.existsSync(), 'ios/ExportOptions.plist');
+      final exportOptions =
+          File('${project.root.path}/ios/ExportOptions.plist');
+      if (platforms.contains('ios')) {
+        ok &= _report(exportOptions.existsSync(), 'ios/ExportOptions.plist');
+      }
 
-      ok &= _report(project.changelogsDir.existsSync(), 'changelogs/ directory');
+      ok &= _report(
+          Directory('${project.root.path}/${config.changelogs.dir}')
+              .existsSync(),
+          'changelogs/ directory');
     } catch (e) {
       _report(false, 'torchinlane.yaml is invalid: $e');
       ok = false;
     }
 
-    final hasAnthropicKey = Platform.environment.containsKey('ANTHROPIC_API_KEY');
-    _report(hasAnthropicKey, 'ANTHROPIC_API_KEY set (needed for `changelog translate` / `screenshots prompts`)');
+    final hasAnthropicKey =
+        Platform.environment.containsKey('ANTHROPIC_API_KEY');
+    _report(hasAnthropicKey,
+        'ANTHROPIC_API_KEY set (needed for `changelog translate` / `screenshots prompts`)');
 
     ok &= _checkBinary('xcrun', required: false);
     ok &= _checkBinary('adb', required: false);
+
+    if (ok && argResults!['verify-credentials'] as bool) {
+      ok = await StoreService(project, log: _logger.info)
+              .verify(parsePlatforms(argResults!['platform'] as String)) ==
+          0;
+    }
 
     if (ok) {
       _logger.success('\nAll checks passed.');
@@ -102,9 +152,10 @@ class DoctorCommand extends Command<int> {
 
   bool _checkBinary(String name, {bool required = true}) {
     final found = Process.runSync(
-      Platform.isWindows ? 'where' : 'which',
-      [name],
-    ).exitCode == 0;
+          Platform.isWindows ? 'where' : 'which',
+          [name],
+        ).exitCode ==
+        0;
     return _report(found, '$name on PATH', required: required);
   }
 

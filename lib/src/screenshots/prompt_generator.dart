@@ -18,7 +18,9 @@ class StorePromptGenerator {
         _apiKey = apiKey ?? Platform.environment['ANTHROPIC_API_KEY'];
 
   static const _endpoint = 'https://api.anthropic.com/v1/messages';
-  static const _model = 'claude-opus-4-8';
+  String get _model =>
+      Platform.environment['TORCHINLANE_AI_MODEL'] ?? 'claude-sonnet-4-6';
+  void close() => _client.close();
   static const appStoreMaxScreenshots = 10;
   static const playStoreMaxScreenshots = 8;
 
@@ -98,23 +100,27 @@ Output as clean Markdown with two sections: "## App Store (10)" and "## Google P
       ],
     });
 
-    final response = await _client.post(
-      Uri.parse(_endpoint),
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': _apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: body,
-    );
+    final response = await _client
+        .post(
+          Uri.parse(_endpoint),
+          headers: {
+            'content-type': 'application/json',
+            'x-api-key': _apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: body,
+        )
+        .timeout(const Duration(seconds: 120));
 
     if (response.statusCode != 200) {
-      throw StorePromptGenerationException('API error ${response.statusCode}: ${response.body}');
+      throw StorePromptGenerationException(
+          'API error ${response.statusCode}; check key/model access.');
     }
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final content = decoded['content'] as List<dynamic>;
-    final textBlock = content.firstWhere((b) => (b as Map)['type'] == 'text') as Map<String, dynamic>;
+    final textBlock = content.firstWhere((b) => (b as Map)['type'] == 'text')
+        as Map<String, dynamic>;
     return textBlock['text'] as String;
   }
 }

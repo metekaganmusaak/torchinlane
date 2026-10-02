@@ -1,5 +1,9 @@
 import 'package:args/command_runner.dart';
 
+import '../changelog/locale_maps.dart';
+import '../store/service.dart';
+import '../store/content.dart';
+
 import '../config/torchinlane_config.dart';
 import '../project/flutter_project.dart';
 import '../shell/logger.dart';
@@ -9,13 +13,33 @@ import '../shell/toolchain.dart';
 class DeployCommand extends Command<int> {
   DeployCommand({Logger logger = const Logger()}) : _logger = logger {
     argParser
-      ..addOption('platform', help: 'ios, android, or ios,android', defaultsTo: 'ios,android')
-      ..addOption('target', allowed: ['internal', 'production'], defaultsTo: 'internal')
-      ..addFlag('upload-only', help: 'Skip build, upload existing AAB/IPA.', negatable: false)
-      ..addFlag('skip-clean', help: 'Skip flutter clean + pub get.', negatable: false)
-      ..addFlag('deep-clean', help: 'Also clear Pods/.gradle caches.', negatable: false)
-      ..addFlag('skip-release-notes', help: 'Do not attach changelog to upload.', negatable: false)
-      ..addFlag('dry-run', help: 'Print commands without executing them.', negatable: false);
+      ..addOption('platform',
+          help: 'ios, android, or ios,android', defaultsTo: 'ios,android')
+      ..addOption('target',
+          allowed: ['internal', 'production'], defaultsTo: 'internal')
+      ..addFlag('upload-only',
+          help: 'Skip build, upload existing AAB/IPA.', negatable: false)
+      ..addFlag('skip-clean',
+          help: 'Skip flutter clean + pub get.', negatable: false)
+      ..addFlag('deep-clean',
+          help: 'Also clear Pods/.gradle caches.', negatable: false)
+      ..addFlag('skip-release-notes',
+          help: 'Do not attach changelog to upload.', negatable: false)
+      ..addFlag('skip-credential-check',
+          negatable: false,
+          help:
+              'Skip live app-access check before building (for an already verified CI job).')
+      ..addFlag('with-store',
+          help: 'Also upload localized store/ metadata and images.',
+          negatable: false)
+      ..addOption('release-status',
+          allowed: ['draft', 'completed', 'inProgress'],
+          defaultsTo: 'draft',
+          help: 'Google release status; completed serves builds to users.')
+      ..addOption('rollout',
+          help: 'Fraction 0–1 for inProgress Google releases.')
+      ..addFlag('dry-run',
+          help: 'Print commands without executing them.', negatable: false);
   }
 
   final Logger _logger;
@@ -24,7 +48,8 @@ class DeployCommand extends Command<int> {
   String get name => 'deploy';
 
   @override
-  String get description => 'Build and upload to TestFlight/App Store or Play Store.';
+  String get description =>
+      'Build and upload to TestFlight/App Store or Play Store.';
 
   @override
   Future<int> run() async {
@@ -39,7 +64,7 @@ class DeployCommand extends Command<int> {
     }
 
     final config = TorchinlaneConfig.load(project.torchinlaneConfigFile);
-    final platforms = (argResults!['platform'] as String).split(',').map((p) => p.trim()).toSet();
+    final platforms = parsePlatforms(argResults!['platform'] as String);
     final target = argResults!['target'] as String;
     final uploadOnly = argResults!['upload-only'] as bool;
     final skipClean = argResults!['skip-clean'] as bool;
@@ -54,10 +79,44 @@ class DeployCommand extends Command<int> {
       return 1;
     }
 
+    if (argResults!['with-store'] as bool) {
+      final errors = StoreContent(project)
+          .validate(platforms, scope: 'all', skipNotes: skipReleaseNotes);
+      if (errors.isNotEmpty) throw StateError(errors.join('\n'));
+    }
+
     if (!dryRun && !await _preflightTools(buildIos: buildIos)) return 1;
 
     final root = project.root.path;
-    final env = skipReleaseNotes ? {'FASTLANE_SKIP_RELEASE_NOTES': '1'} : <String, String>{};
+    final status = argResults!['release-status'] as String;
+    final rollout = argResults!['rollout'] as String?;
+    if (status == 'inProgress' &&
+        (double.tryParse(rollout ?? '') == null ||
+            double.parse(rollout!) <= 0 ||
+            double.parse(rollout) >= 1)) {
+      throw ArgumentError('inProgress needs --rollout between 0 and 1.');
+    }
+    if (status != 'inProgress' && rollout != null) {
+      throw ArgumentError('--rollout requires --release-status inProgress.');
+    }
+    final env = {
+      'FASTLANE_SKIP_RELEASE_NOTES': skipReleaseNotes ? '1' : '0',
+      'TORCHINLANE_RELEASE_STATUS': status,
+      'TORCHINLANE_USE_STORE_NOTES':
+          argResults!['with-store'] == true ? '1' : '0',
+      if (rollout != null) 'TORCHINLANE_ROLLOUT': rollout
+    };
+
+    final credentialFailures = <String>[];
+    if (!dryRun && argResults!['skip-credential-check'] != true) {
+      for (final platform in platforms) {
+        if (await StoreService(project, log: _logger.info).verify([platform]) !=
+            0) {
+          credentialFailures.add(platform);
+        }
+      }
+      if (credentialFailures.length == platforms.length) return 1;
+    }
 
     final sharedSteps = <_Step>[];
     if (!uploadOnly && !skipClean) {
@@ -69,28 +128,38 @@ class DeployCommand extends Command<int> {
     if (buildAndroid) {
       if (!uploadOnly) {
         if (deepClean) {
-          androidSteps.add(_Step('rm', ['-rf', '$root/android/.gradle', '$root/android/app/build']));
+          androidSteps.add(_Step('rm',
+              ['-rf', '$root/android/.gradle', '$root/android/app/build']));
         }
         final args = ['build', 'appbundle'];
         if (config.obfuscate) {
-          args.addAll(['--obfuscate', '--split-debug-info=${config.splitDebugInfo}']);
+          args.addAll(
+              ['--obfuscate', '--split-debug-info=${config.splitDebugInfo}']);
         }
         androidSteps.add(_Step('flutter', args, cwd: root));
       }
-      final lane = target == 'production' ? 'deploy_production' : 'deploy_internal';
-      androidSteps.add(_Step('fastlane', [lane], cwd: '$root/android', env: env));
+      final lane =
+          target == 'production' ? 'deploy_production' : 'deploy_internal';
+      androidSteps
+          .add(_Step('fastlane', [lane], cwd: '$root/android', env: env));
     }
 
     final iosSteps = <_Step>[];
     if (buildIos) {
       if (!uploadOnly) {
         if (deepClean) {
-          iosSteps.add(_Step('rm', ['-rf', '$root/ios/Pods', '$root/ios/Podfile.lock']));
+          iosSteps.add(
+              _Step('rm', ['-rf', '$root/ios/Pods', '$root/ios/Podfile.lock']));
         }
         iosSteps.add(_Step('pod', ['install'], cwd: '$root/ios'));
-        final args = ['build', 'ipa', '--export-options-plist=ios/ExportOptions.plist'];
+        final args = [
+          'build',
+          'ipa',
+          '--export-options-plist=ios/ExportOptions.plist'
+        ];
         if (config.obfuscate) {
-          args.addAll(['--obfuscate', '--split-debug-info=${config.splitDebugInfo}']);
+          args.addAll(
+              ['--obfuscate', '--split-debug-info=${config.splitDebugInfo}']);
         }
         iosSteps.add(_Step('flutter', args, cwd: root));
       }
@@ -101,21 +170,40 @@ class DeployCommand extends Command<int> {
     if (sharedSteps.isNotEmpty) {
       final sharedOk = await _runSteps(sharedSteps, dryRun: dryRun);
       if (!sharedOk) {
-        _logger.error('\nShared setup failed — aborting before platform builds.');
+        _logger
+            .error('\nShared setup failed — aborting before platform builds.');
         return 1;
       }
     }
 
-    final failedPlatforms = <String>[];
-    if (buildAndroid) {
+    final failedPlatforms = [...credentialFailures];
+    if (buildAndroid && !credentialFailures.contains('android')) {
       _logger.info('\n--- Android ---');
-      if (!await _runSteps(androidSteps, dryRun: dryRun)) failedPlatforms.add('android');
+      if (!await _runSteps(androidSteps, dryRun: dryRun)) {
+        failedPlatforms.add('android');
+      }
     }
-    if (buildIos) {
+    if (buildIos && !credentialFailures.contains('ios')) {
       _logger.info('\n--- iOS ---');
-      if (!await _runSteps(iosSteps, dryRun: dryRun)) failedPlatforms.add('ios');
+      if (!await _runSteps(iosSteps, dryRun: dryRun)) {
+        failedPlatforms.add('ios');
+      }
     }
 
+    if (argResults!['with-store'] as bool) {
+      final version = project.readVersion();
+      final result = await StoreService(project, log: _logger.info).push(
+          platforms
+              .where((platform) => !failedPlatforms.contains(platform))
+              .toList(),
+          scope: 'all',
+          track: target == 'production' ? 'production' : 'internal',
+          versionCode: version.build.toString(),
+          appVersion: '${version.major}.${version.minor}.${version.patch}',
+          dryRun: dryRun,
+          skipNotes: skipReleaseNotes);
+      if (result != 0) failedPlatforms.add('store content');
+    }
     if (failedPlatforms.isNotEmpty) {
       _logger.error('\nDeploy failed for: ${failedPlatforms.join(', ')}.');
       return 1;
@@ -152,19 +240,28 @@ class DeployCommand extends Command<int> {
 
   Future<bool> _runSteps(List<_Step> steps, {required bool dryRun}) async {
     for (final step in steps) {
-      _logger.info('\$ ${step.executable} ${step.arguments.join(' ')}${step.cwd != null ? '  (in ${step.cwd})' : ''}');
+      _logger.info(
+          '\$ ${step.executable} ${step.arguments.join(' ')}${step.cwd != null ? '  (in ${step.cwd})' : ''}');
       if (dryRun) continue;
 
       // Augmented PATH so a gem installed moments ago in preflight resolves
       // without the user first reloading their shell.
-      final result = await runStreamed(
-        step.executable,
-        step.arguments,
-        workingDirectory: step.cwd,
-        environment: Toolchain(logger: _logger).augmentedEnvironment(step.env),
-      );
+      late ProcessResult2 result;
+      try {
+        result = await runStreamed(
+          step.executable,
+          step.arguments,
+          workingDirectory: step.cwd,
+          environment:
+              Toolchain(logger: _logger).augmentedEnvironment(step.env),
+        );
+      } catch (e) {
+        _logger.error('Cannot run ${step.executable}: $e');
+        return false;
+      }
       if (!result.success) {
-        _logger.error('Step failed: ${step.executable} ${step.arguments.join(' ')} (exit ${result.exitCode})');
+        _logger.error(
+            'Step failed: ${step.executable} ${step.arguments.join(' ')} (exit ${result.exitCode})');
         return false;
       }
     }

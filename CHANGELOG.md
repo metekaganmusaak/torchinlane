@@ -1,5 +1,65 @@
 # Changelog
 
+## 0.2.0
+
+### Upgrade notes
+
+- After upgrading the CLI, run `torchinlane update -y` in each initialized Flutter
+  project to regenerate Fastlane helpers and the shared store locale registry.
+  Changed generated files are backed up; configuration and store content remain.
+- `store translate` generates a Claude Code/Codex task by default. Add `--api`
+  for optional direct Anthropic translation. Legacy `changelog translate` retains
+  its API behavior. See [migration instructions](doc/migration.md).
+
+### Added
+
+- Local Torchinlane Studio GUI: project setup, credential import, locale editing,
+  field counters, screenshot import/order, validation, exports, uploads, remote
+  text comparison/import, and build/deploy logs.
+- `store init/locales/validate/export/translate/prompt/push/pull` for localized
+  App Store and Google Play metadata, images and release notes. Native locale
+  catalogs and field limits are separate for each store; blank upload fields
+  preserve existing remote content.
+- API-free coding-agent translation tasks with exact target paths, source/target
+  snapshots, pending fields, locale-specific limits and validation instructions.
+  Studio supports preparing/copying tasks and reloading/validating agent edits.
+- Credential import/reusable profiles, live app-access verification, Google Cloud
+  service-account/WIF bootstrap, and environment-based credential overrides.
+- iOS Fastlane match signing sync and Android release signing integration for
+  standard Flutter Groovy/Kotlin projects using an existing upload keystore.
+- GitHub Actions workflow generation with independent iOS/Android jobs, signing
+  restoration and optional keyless Google authentication.
+- `deploy --with-store`, explicit Google release status/rollout options,
+  noninteractive initialization, scoped store uploads and dry-run plans.
+
+### Fixed
+
+- App Store production release notes were skipped by metadata settings. Notes
+  now upload through isolated metadata staging; Apple's first release omits
+  unavailable What's New. TestFlight sends localized What to Test and waits for
+  build processing when notes are supplied.
+- Apple Bangla and Google Hebrew locale codes, unsupported Apple Filipino,
+  regional locale preservation and shared Dart/Ruby locale mapping.
+- Google note-only updates now target a selected track/version and merge locales
+  while preserving release status, version codes and other releases.
+- Over-limit notes are rejected instead of silently truncated; Apple keywords
+  are validated against the 100 UTF-8 byte limit.
+- Configured credential/changelog paths, quoted YAML strings, shell escaping,
+  Android binary screenshot capture, HTTP timeouts/client cleanup and temporary
+  staging cleanup.
+- Release notes are retained after upload for retries. Platform failures are
+  reported independently so successful platform work can complete.
+
+### Documentation and validation
+
+- Rewrite README/examples and add store content, migration, automation and
+  Turkish implementation guides, including credential/signing setup and the
+  manual account steps that remain.
+- Expand to 50 automated tests covering content validation, translation tasks,
+  credentials, Studio APIs, signing/CI generation and generated Fastlane lanes.
+  Verify Studio in Chrome on desktop/mobile. Live store uploads and real signing
+  are not exercised without app-specific credentials.
+
 ## 0.1.12
 
 - Fix `CocoaPods not installed or not in valid state` aborting an iOS deploy. The old check was a bare `which pod`, which succeeds whenever the binary merely exists — so a CocoaPods install broken by a system Ruby or Xcode upgrade was reported as ✓ by `doctor` and only blew up later, at `pod install`, after a full build had already run. Tool detection now distinguishes four states instead of found/not-found: `ok`, `broken` (resolves but won't execute), `installedNotOnPath` (gem present in a gem bin dir the shell never exported), and `missing` — and applies the matching repair for each.

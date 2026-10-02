@@ -18,7 +18,8 @@ class ScreenshotsCommand extends Command<int> {
   String get name => 'screenshots';
 
   @override
-  String get description => 'Capture raw screenshots and generate store-image prompts.';
+  String get description =>
+      'Capture raw screenshots and generate store-image prompts.';
 }
 
 class _CaptureCommand extends Command<int> {
@@ -54,34 +55,42 @@ class _CaptureCommand extends Command<int> {
     if (platform == 'ios') {
       final devices = await ScreenshotCapture.listIosSimulators();
       if (devices.isEmpty) {
-        _logger.error('No booted iOS simulators found. Boot one first: `open -a Simulator`.');
+        _logger.error(
+            'No booted iOS simulators found. Boot one first: `open -a Simulator`.');
         return 1;
       }
-      targetId = devices.length == 1
-          ? devices.first['udid']!
-          : _pickDevice(devices);
+      targetId =
+          devices.length == 1 ? devices.first['udid']! : _pickDevice(devices);
     } else {
       final devices = await ScreenshotCapture.listAndroidDevices();
       if (devices.isEmpty) {
-        _logger.error('No connected Android devices/emulators found (`adb devices`).');
+        _logger.error(
+            'No connected Android devices/emulators found (`adb devices`).');
         return 1;
       }
-      targetId = devices.length == 1 ? devices.first : askChoice('Select Android device', devices);
+      targetId = devices.length == 1
+          ? devices.first
+          : askChoice('Select Android device', devices);
     }
 
-    _logger.info('Run your app on this device now (e.g. `flutter run -d $targetId`).');
-    _logger.info('For each screen: navigate to it, then come back here and press Enter.\n');
+    _logger.info(
+        'Run your app on this device now (e.g. `flutter run -d $targetId`).');
+    _logger.info(
+        'For each screen: navigate to it, then come back here and press Enter.\n');
 
     while (true) {
       final pageName = ask('Page name (blank to finish)');
       if (pageName.isEmpty) break;
 
-      stdout.write('Navigate to "$pageName" now, then press Enter to capture...');
+      stdout
+          .write('Navigate to "$pageName" now, then press Enter to capture...');
       stdin.readLineSync();
 
       final entry = platform == 'ios'
-          ? await capture.captureIos(simulatorUdid: targetId, locale: locale, pageName: pageName)
-          : await capture.captureAndroid(serial: targetId, locale: locale, pageName: pageName);
+          ? await capture.captureIos(
+              simulatorUdid: targetId, locale: locale, pageName: pageName)
+          : await capture.captureAndroid(
+              serial: targetId, locale: locale, pageName: pageName);
       capture.appendToManifest(entry);
       _logger.success('Captured: ${entry.path}');
     }
@@ -107,7 +116,8 @@ class _PromptsCommand extends Command<int> {
   String get name => 'prompts';
 
   @override
-  String get description => 'Analyze the project and generate store-ready image-generation prompts.';
+  String get description =>
+      'Analyze the project and generate store-ready image-generation prompts.';
 
   @override
   Future<int> run() async {
@@ -129,9 +139,11 @@ class _PromptsCommand extends Command<int> {
       outFile.writeAsStringSync(markdown);
       _logger.success('Wrote ${outFile.path}');
       return 0;
-    } on StorePromptGenerationException catch (e) {
+    } catch (e) {
       _logger.error(e.toString());
       return 1;
+    } finally {
+      generator.close();
     }
   }
 }

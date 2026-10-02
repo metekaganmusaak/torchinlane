@@ -1,12 +1,41 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:yaml/yaml.dart';
 
 const defaultLocales = [
-  'ar', 'bn', 'cs', 'da', 'de', 'el', 'en', 'es', 'fa', 'fi',
-  'fr', 'he', 'hi', 'hu', 'id', 'it', 'ja', 'ko', 'nl', 'no',
-  'pl', 'pt', 'ro', 'ru', 'sk', 'sv', 'th', 'tl', 'tr', 'uk',
-  'vi', 'zh',
+  'ar',
+  'bn',
+  'cs',
+  'da',
+  'de',
+  'el',
+  'en',
+  'es',
+  'fa',
+  'fi',
+  'fr',
+  'he',
+  'hi',
+  'hu',
+  'id',
+  'it',
+  'ja',
+  'ko',
+  'nl',
+  'no',
+  'pl',
+  'pt',
+  'ro',
+  'ru',
+  'sk',
+  'sv',
+  'th',
+  'tl',
+  'tr',
+  'uk',
+  'vi',
+  'zh',
 ];
 
 class IosConfig {
@@ -52,7 +81,8 @@ class AndroidConfig {
 }
 
 class ChangelogsConfig {
-  ChangelogsConfig({required this.dir, required this.sourceLocale, required this.locales});
+  ChangelogsConfig(
+      {required this.dir, required this.sourceLocale, required this.locales});
 
   final String dir;
   final String sourceLocale;
@@ -88,11 +118,13 @@ class TorchinlaneConfig {
       ios: IosConfig(
         bundleId: iosMap['bundle_id'] as String,
         teamId: iosMap['team_id'] as String,
-        itcTeamId: (iosMap['itc_team_id'] as String?) ?? iosMap['team_id'] as String,
+        itcTeamId:
+            (iosMap['itc_team_id'] as String?) ?? iosMap['team_id'] as String,
         appleId: iosMap['apple_id'] as String,
         ascKeyId: iosMap['asc_key_id'] as String,
         ascIssuerId: iosMap['asc_issuer_id'] as String,
-        ascKeyPath: (iosMap['asc_key_path'] as String?) ?? 'ios/fastlane/api_key.p8',
+        ascKeyPath:
+            (iosMap['asc_key_path'] as String?) ?? 'ios/fastlane/api_key.p8',
         firebaseCrashlytics: (iosMap['firebase_crashlytics'] as bool?) ?? false,
         firebaseAppId: (iosMap['firebase_app_id'] as String?) ?? '',
       ),
@@ -110,7 +142,8 @@ class TorchinlaneConfig {
             : defaultLocales,
       ),
       obfuscate: (buildMap?['obfuscate'] as bool?) ?? true,
-      splitDebugInfo: (buildMap?['split_debug_info'] as String?) ?? 'build/debug-info',
+      splitDebugInfo:
+          (buildMap?['split_debug_info'] as String?) ?? 'build/debug-info',
     );
   }
 
@@ -123,24 +156,24 @@ class TorchinlaneConfig {
   }) {
     final localesYaml = defaultLocales.map((l) => '  - $l').join('\n');
     return '''
-app_name: $appName
+app_name: ${jsonEncode(appName)}
 ios:
-  bundle_id: ${ios.bundleId}
-  team_id: ${ios.teamId}
-  itc_team_id: ${ios.itcTeamId}
-  apple_id: ${ios.appleId}
-  asc_key_id: ${ios.ascKeyId}
-  asc_issuer_id: ${ios.ascIssuerId}
-  asc_key_path: ${ios.ascKeyPath}
+  bundle_id: ${jsonEncode(ios.bundleId)}
+  team_id: ${jsonEncode(ios.teamId)}
+  itc_team_id: ${jsonEncode(ios.itcTeamId)}
+  apple_id: ${jsonEncode(ios.appleId)}
+  asc_key_id: ${jsonEncode(ios.ascKeyId)}
+  asc_issuer_id: ${jsonEncode(ios.ascIssuerId)}
+  asc_key_path: ${jsonEncode(ios.ascKeyPath)}
   firebase_crashlytics: ${ios.firebaseCrashlytics}
-  firebase_app_id: ${ios.firebaseAppId}
+  firebase_app_id: ${jsonEncode(ios.firebaseAppId)}
 android:
-  package_name: ${android.packageName}
-  service_account_json: ${android.serviceAccountJson}
-  firebase_app_id: ${android.firebaseAppId}
+  package_name: ${jsonEncode(android.packageName)}
+  service_account_json: ${jsonEncode(android.serviceAccountJson)}
+  firebase_app_id: ${jsonEncode(android.firebaseAppId)}
 changelogs:
-  dir: $changelogsDir
-  source_locale: $sourceLocale
+  dir: ${jsonEncode(changelogsDir)}
+  source_locale: ${jsonEncode(sourceLocale)}
   locales:
 $localesYaml
 build:
@@ -150,7 +183,7 @@ screenshots:
   output_dir: screenshots
   ios_devices: []
   android_devices: []
-  locales: [$sourceLocale]
+  locales: [${jsonEncode(sourceLocale)}]
 ''';
   }
 }

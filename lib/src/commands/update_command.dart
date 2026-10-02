@@ -54,11 +54,13 @@ class UpdateCommand extends Command<int> {
       ios: config.ios,
       android: config.android,
       sourceLocale: config.changelogs.sourceLocale,
+      changelogsDir: config.changelogs.dir,
     );
 
     final applyAll = argResults!['yes'] as bool;
     final dryRun = argResults!['dry-run'] as bool;
     final root = project.root.path;
+    if (!dryRun) scaffolder.ensureGitignore(config.ios, config.android);
 
     var changed = 0;
     var applied = 0;

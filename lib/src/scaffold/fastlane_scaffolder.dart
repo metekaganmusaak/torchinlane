@@ -1,4 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
+import 'package:path/path.dart' as p;
+import '../changelog/locale_maps.dart';
+import 'store_templates.dart';
 
 import '../config/torchinlane_config.dart';
 import '../project/flutter_project.dart';
@@ -18,6 +22,7 @@ class FastlaneScaffolder {
     required IosConfig ios,
     required AndroidConfig android,
     required String sourceLocale,
+    String changelogsDir = 'changelogs',
   }) {
     return {
       'ios/fastlane/Appfile': renderTemplate(iosAppfileTemplate, {
@@ -27,7 +32,7 @@ class FastlaneScaffolder {
         'team_id': ios.teamId,
       }),
       'ios/fastlane/Fastfile': renderTemplate(
-        iosFastfileTemplate,
+        _withLanes(iosFastfileTemplate, iosStoreLanes),
         {
           'asc_key_id': ios.ascKeyId,
           'asc_issuer_id': ios.ascIssuerId,
@@ -36,19 +41,35 @@ class FastlaneScaffolder {
         flags: {'firebase': ios.firebaseCrashlytics},
       ),
       'android/fastlane/Appfile': renderTemplate(androidAppfileTemplate, {
-        'service_account_json': _relativeToAndroidDir(android.serviceAccountJson),
+        'service_account_json':
+            _relativeToAndroidDir(android.serviceAccountJson),
         'package_name': android.packageName,
       }),
-      'android/fastlane/Fastfile': androidFastfileTemplate,
-      'fastlane/ChangelogHelper.rb': changelogHelperTemplate,
+      'android/fastlane/Fastfile':
+          _withLanes(androidFastfileTemplate, androidStoreLanes),
+      'fastlane/ChangelogHelper.rb': newChangelogHelperTemplate,
+      'fastlane/StoreHelper.rb': storeHelperTemplate,
+      'fastlane/locales.json': const JsonEncoder.withIndent('  ')
+          .convert({'ios': appStoreLocaleMap, 'android': googlePlayLocaleMap}),
       'scripts/build.sh': renderTemplate(buildScriptTemplate, {
-        'app_name': appName,
-        'source_locale': sourceLocale,
-        'changelogs_dir': 'changelogs',
-        'ios_firebase_app_id': ios.firebaseAppId,
-        'android_firebase_app_id': android.firebaseAppId,
+        'app_name': _shellDouble(appName),
+        'source_locale': _shellDouble(sourceLocale),
+        'changelogs_dir': _shellDouble(changelogsDir),
+        'ios_firebase_app_id': _shellDouble(ios.firebaseAppId),
+        'android_firebase_app_id': _shellDouble(android.firebaseAppId),
       }),
     };
+  }
+
+  String _shellDouble(String value) => value
+      .replaceAll('\\', r'\\')
+      .replaceAll(r'$', r'\$')
+      .replaceAll('`', r'\`')
+      .replaceAll('"', r'\"');
+
+  String _withLanes(String template, String lanes) {
+    final last = template.lastIndexOf('end');
+    return '${template.substring(0, last)}$lanes\nend\n';
   }
 
   /// The subset of [managedFiles] paths that must be executable.
@@ -59,6 +80,7 @@ class FastlaneScaffolder {
     required IosConfig ios,
     required AndroidConfig android,
     required String sourceLocale,
+    String changelogsDir = 'changelogs',
   }) {
     final root = project.root.path;
 
@@ -67,6 +89,7 @@ class FastlaneScaffolder {
       ios: ios,
       android: android,
       sourceLocale: sourceLocale,
+      changelogsDir: changelogsDir,
     );
     files.forEach((rel, content) {
       final path = '$root/$rel';
@@ -76,11 +99,12 @@ class FastlaneScaffolder {
 
     final exportOptions = File('$root/ios/ExportOptions.plist');
     if (!exportOptions.existsSync()) {
-      _write(exportOptions.path, renderTemplate(exportOptionsPlistTemplate, {'team_id': ios.teamId}));
+      _write(exportOptions.path,
+          renderTemplate(exportOptionsPlistTemplate, {'team_id': ios.teamId}));
     }
 
     for (final locale in defaultLocales) {
-      final file = File('$root/changelogs/$locale/release_notes.txt');
+      final file = File('$root/$changelogsDir/$locale/release_notes.txt');
       if (!file.existsSync()) {
         file.createSync(recursive: true);
       }
@@ -91,17 +115,23 @@ class FastlaneScaffolder {
       appName: appName,
       ios: ios,
       android: android,
-      changelogsDir: 'changelogs',
+      changelogsDir: changelogsDir,
       sourceLocale: sourceLocale,
     ));
 
     _updateGitignore(root, ios, android);
   }
 
+  void ensureGitignore(IosConfig ios, AndroidConfig android) {
+    _updateGitignore(project.root.path, ios, android);
+  }
+
   /// [path] is relative to the project root (e.g. `android/fastlane/x.json`).
   /// The Android Appfile runs with cwd `android/`, so strip that prefix.
   String _relativeToAndroidDir(String path) {
-    return path.startsWith('android/') ? path.substring('android/'.length) : path;
+    return path.startsWith('android/')
+        ? path.substring('android/'.length)
+        : path;
   }
 
   void _write(String path, String content) {
@@ -118,16 +148,27 @@ class FastlaneScaffolder {
   void _updateGitignore(String root, IosConfig ios, AndroidConfig android) {
     final gitignore = File('$root/.gitignore');
     final entries = <String>[
-      ios.ascKeyPath,
-      android.serviceAccountJson,
+      if (!p.isAbsolute(ios.ascKeyPath) || p.isWithin(root, ios.ascKeyPath))
+        p.isAbsolute(ios.ascKeyPath)
+            ? p.relative(ios.ascKeyPath, from: root)
+            : ios.ascKeyPath,
+      if (!p.isAbsolute(android.serviceAccountJson) ||
+          p.isWithin(root, android.serviceAccountJson))
+        p.isAbsolute(android.serviceAccountJson)
+            ? p.relative(android.serviceAccountJson, from: root)
+            : android.serviceAccountJson,
       '**/fastlane/report.xml',
       '**/fastlane/README.md',
       '**/*.bak',
+      'store/.snapshots/',
+      '.torchinlane/',
+      'gha-creds-*.json',
       'build/debug-info-archive/',
     ];
 
     final existing = gitignore.existsSync() ? gitignore.readAsStringSync() : '';
-    final toAdd = entries.where((e) => !existing.contains(e)).toList();
+    final ignoredLines = existing.split('\n').toSet();
+    final toAdd = entries.where((e) => !ignoredLines.contains(e)).toList();
     if (toAdd.isEmpty) return;
 
     final addition = '\n# torchinlane\n${toAdd.join('\n')}\n';

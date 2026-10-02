@@ -2,16 +2,20 @@
 /// Placeholders use {{name}} syntax and are replaced by [renderTemplate].
 library;
 
-const iosAppfileTemplate = '''
-app_identifier("{{bundle_id}}")
-apple_id("{{apple_id}}")
-itc_team_id("{{itc_team_id}}")
-team_id("{{team_id}}")
+const iosAppfileTemplate = r'''
+require_relative '../../fastlane/StoreHelper'
+ios = StoreHelper.config.fetch('ios')
+app_identifier(ios.fetch('bundle_id'))
+apple_id(ios['apple_id']) unless ios['apple_id'].to_s.empty?
+itc_team_id(ios['itc_team_id']) unless ios['itc_team_id'].to_s.empty?
+team_id(ios.fetch('team_id'))
 ''';
 
-const androidAppfileTemplate = '''
-json_key_file("{{service_account_json}}")
-package_name("{{package_name}}")
+const androidAppfileTemplate = r'''
+require_relative '../../fastlane/StoreHelper'
+android = StoreHelper.config.fetch('android')
+json_key_file(ENV['GOOGLE_APPLICATION_CREDENTIALS'] || StoreHelper.path(android.fetch('service_account_json')))
+package_name(android.fetch('package_name'))
 ''';
 
 const iosFastfileTemplate = '''
@@ -22,17 +26,11 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    api_key = app_store_connect_api_key(
-      key_id: "{{asc_key_id}}",
-      issuer_id: "{{asc_issuer_id}}",
-      key_filepath: File.expand_path("../api_key.p8", __FILE__),
-      duration: 1200,
-      in_house: false
-    )
+    api_key = app_store_connect_api_key(StoreHelper.api_key)
 
-    changelogs_dir = File.expand_path('../../changelogs', __dir__)
+    changelogs_dir = StoreHelper.path(StoreHelper.config.fetch('changelogs', {}).fetch('dir', 'changelogs'))
     skip_release_notes = ENV['FASTLANE_SKIP_RELEASE_NOTES'] == '1'
-    testflight_changelog = ChangelogHelper.testflight_changelog(changelogs_dir, '{{source_locale}}')
+    testflight_changelog = skip_release_notes ? '' : ChangelogHelper.testflight_changelog(changelogs_dir, '{{source_locale}}')
 
     upload_options = {
       api_key: api_key,
@@ -42,6 +40,14 @@ platform :ios do
 
     upload_options[:changelog] = testflight_changelog if !skip_release_notes && !testflight_changelog.to_s.empty?
 
+    unless skip_release_notes
+      localized = ChangelogHelper.app_store_release_notes(changelogs_dir)
+      unless localized.empty?
+        upload_options[:localized_build_info] = localized.transform_values { |text| { whats_new: text } }
+        upload_options[:skip_waiting_for_build_processing] = false
+        upload_options[:wait_processing_timeout_duration] = 1800
+      end
+    end
     upload_to_testflight(upload_options)
 {{#firebase}}
     upload_dsyms_to_crashlytics
@@ -102,32 +108,35 @@ platform :ios do
 
   desc "Release to App Store production (all locales)"
   lane :release do
-    changelogs_dir = File.expand_path('../../changelogs', __dir__)
+    changelogs_dir = StoreHelper.path(StoreHelper.config.fetch('changelogs', {}).fetch('dir', 'changelogs'))
     skip_release_notes = ENV['FASTLANE_SKIP_RELEASE_NOTES'] == '1'
 
-    api_key = app_store_connect_api_key(
-      key_id: "{{asc_key_id}}",
-      issuer_id: "{{asc_issuer_id}}",
-      key_filepath: File.expand_path("../api_key.p8", __FILE__),
-      duration: 1200,
-      in_house: false
-    )
+    api_key = app_store_connect_api_key(StoreHelper.api_key)
 
-    release_notes = ChangelogHelper.app_store_release_notes(changelogs_dir)
+    release_notes = skip_release_notes ? {} : ChangelogHelper.app_store_release_notes(changelogs_dir)
+    if !release_notes.empty? && !StoreHelper.app_store_notes_allowed?
+      UI.important("Apple first release has no What's New; notes retained locally")
+      release_notes = {}
+    end
     deliver_options = {
       api_key: api_key,
       ipa: Dir[File.expand_path("../../../build/ios/ipa/*.ipa", __FILE__)].first,
       submit_for_review: false,
       automatic_release: false,
       force: true,
-      skip_metadata: true,
+      metadata_path: Dir.mktmpdir('torchinlane-deliver-notes'),
+      skip_metadata: skip_release_notes || release_notes.empty?,
       skip_screenshots: true,
-      skip_app_version_update: true
+      skip_app_version_update: false
     }
 
     deliver_options[:release_notes] = release_notes if !skip_release_notes && !release_notes.empty?
 
-    deliver(deliver_options)
+    begin
+      deliver(deliver_options)
+    ensure
+      FileUtils.remove_entry(deliver_options[:metadata_path])
+    end
 {{#firebase}}
     upload_dsyms_to_crashlytics
 {{/firebase}}
@@ -135,25 +144,28 @@ platform :ios do
 
   desc "Update App Store release notes only (no binary upload)"
   lane :update_release_notes do
-    changelogs_dir = File.expand_path('../../changelogs', __dir__)
+    changelogs_dir = StoreHelper.path(StoreHelper.config.fetch('changelogs', {}).fetch('dir', 'changelogs'))
     release_notes = ChangelogHelper.app_store_release_notes(changelogs_dir)
 
-    api_key = app_store_connect_api_key(
-      key_id: "{{asc_key_id}}",
-      issuer_id: "{{asc_issuer_id}}",
-      key_filepath: File.expand_path("../api_key.p8", __FILE__),
-      duration: 1200,
-      in_house: false
-    )
+    api_key = app_store_connect_api_key(StoreHelper.api_key)
 
+    UI.user_error!('No release notes to upload') if release_notes.empty?
+    UI.user_error!("Apple first release has no What's New field") unless StoreHelper.app_store_notes_allowed?
+    metadata_path = Dir.mktmpdir('torchinlane-deliver-notes')
+    begin
     deliver(
       api_key: api_key,
+      metadata_path: metadata_path,
       release_notes: release_notes,
+      app_version: ENV['TORCHINLANE_APP_VERSION'],
       skip_binary_upload: true,
       skip_screenshots: true,
       skip_metadata: false,
       force: true
     )
+    ensure
+      FileUtils.remove_entry(metadata_path)
+    end
   end
 {{#firebase}}
 
@@ -173,14 +185,15 @@ default_platform(:android)
 platform :android do
   desc "Upload AAB to Google Play Internal Testing"
   lane :deploy_internal do
-    changelogs_dir = File.expand_path('../../changelogs', __dir__)
+    changelogs_dir = StoreHelper.path(StoreHelper.config.fetch('changelogs', {}).fetch('dir', 'changelogs'))
     skip_release_notes = ENV['FASTLANE_SKIP_RELEASE_NOTES'] == '1'
     metadata_path = skip_release_notes ? nil : ChangelogHelper.write_google_play_metadata(changelogs_dir)
 
     upload_options = {
       track: 'internal',
       aab: '../build/app/outputs/bundle/release/app-release.aab',
-      release_status: 'draft'
+      release_status: ENV.fetch('TORCHINLANE_RELEASE_STATUS', 'draft'),
+      rollout: ENV['TORCHINLANE_ROLLOUT']&.to_f
     }
     if metadata_path
       upload_options[:metadata_path] = metadata_path
@@ -190,21 +203,29 @@ platform :android do
       upload_options[:skip_upload_changelogs] = false
     else
       upload_options[:skip_upload_metadata] = true
+      upload_options[:skip_upload_images] = true
+      upload_options[:skip_upload_screenshots] = true
+      upload_options[:skip_upload_changelogs] = true
     end
 
-    upload_to_play_store(upload_options)
+    begin
+      upload_to_play_store(upload_options)
+    ensure
+      FileUtils.remove_entry(metadata_path) if metadata_path
+    end
   end
 
   desc "Upload AAB to Google Play Production"
   lane :deploy_production do
-    changelogs_dir = File.expand_path('../../changelogs', __dir__)
+    changelogs_dir = StoreHelper.path(StoreHelper.config.fetch('changelogs', {}).fetch('dir', 'changelogs'))
     skip_release_notes = ENV['FASTLANE_SKIP_RELEASE_NOTES'] == '1'
     metadata_path = skip_release_notes ? nil : ChangelogHelper.write_google_play_metadata(changelogs_dir)
 
     upload_options = {
       track: 'production',
       aab: '../build/app/outputs/bundle/release/app-release.aab',
-      release_status: 'draft'
+      release_status: ENV.fetch('TORCHINLANE_RELEASE_STATUS', 'draft'),
+      rollout: ENV['TORCHINLANE_ROLLOUT']&.to_f
     }
     if metadata_path
       upload_options[:metadata_path] = metadata_path
@@ -214,104 +235,33 @@ platform :android do
       upload_options[:skip_upload_changelogs] = false
     else
       upload_options[:skip_upload_metadata] = true
+      upload_options[:skip_upload_images] = true
+      upload_options[:skip_upload_screenshots] = true
+      upload_options[:skip_upload_changelogs] = true
     end
 
-    upload_to_play_store(upload_options)
+    begin
+      upload_to_play_store(upload_options)
+    ensure
+      FileUtils.remove_entry(metadata_path) if metadata_path
+    end
   end
 
   desc "Update Google Play release notes only (no binary upload)"
   lane :update_release_notes do
-    changelogs_dir = File.expand_path('../../changelogs', __dir__)
-    metadata_path = ChangelogHelper.write_google_play_metadata(changelogs_dir)
+    changelogs_dir = StoreHelper.path(StoreHelper.config.fetch('changelogs', {}).fetch('dir', 'changelogs'))
+    metadata_path = ChangelogHelper.write_google_play_metadata(changelogs_dir, ENV.fetch('TORCHINLANE_VERSION_CODE'))
+    UI.user_error!('No release notes to upload') unless metadata_path
 
-    upload_to_play_store(
-      track: 'internal',
-      metadata_path: metadata_path,
-      skip_upload_aab: true,
-      skip_upload_apk: true,
-      skip_upload_metadata: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-      skip_upload_changelogs: false,
-      validate_only: false
-    )
-  end
-end
-''';
-
-const changelogHelperTemplate = r'''
-require 'tmpdir'
-require 'fileutils'
-
-module ChangelogHelper
-  GOOGLE_PLAY_LOCALE_MAP = {
-    'ar' => 'ar', 'bn' => 'bn-BD', 'cs' => 'cs-CZ', 'da' => 'da-DK', 'de' => 'de-DE',
-    'el' => 'el-GR', 'en' => 'en-US', 'es' => 'es-ES', 'fa' => 'fa', 'fi' => 'fi-FI',
-    'fr' => 'fr-FR', 'he' => 'he', 'hi' => 'hi-IN', 'hu' => 'hu-HU', 'id' => 'id',
-    'it' => 'it-IT', 'ja' => 'ja-JP', 'ko' => 'ko-KR', 'nl' => 'nl-NL', 'no' => 'no-NO',
-    'pl' => 'pl-PL', 'pt' => 'pt-BR', 'ro' => 'ro', 'ru' => 'ru-RU', 'sk' => 'sk',
-    'sv' => 'sv-SE', 'th' => 'th', 'tl' => 'fil', 'tr' => 'tr-TR', 'uk' => 'uk',
-    'vi' => 'vi', 'zh' => 'zh-CN',
-  }.freeze
-
-  APP_STORE_LOCALE_MAP = {
-    'ar' => 'ar-SA', 'bn' => 'bn', 'cs' => 'cs', 'da' => 'da', 'de' => 'de-DE',
-    'el' => 'el', 'en' => 'en-US', 'es' => 'es-ES', 'fa' => nil, 'fi' => 'fi',
-    'fr' => 'fr-FR', 'he' => 'he', 'hi' => 'hi', 'hu' => 'hu', 'id' => 'id',
-    'it' => 'it', 'ja' => 'ja', 'ko' => 'ko', 'nl' => 'nl-NL', 'no' => 'no',
-    'pl' => 'pl', 'pt' => 'pt-BR', 'ro' => 'ro', 'ru' => 'ru', 'sk' => 'sk',
-    'sv' => 'sv', 'th' => 'th', 'tl' => 'fil', 'tr' => 'tr', 'uk' => 'uk',
-    'vi' => 'vi', 'zh' => 'zh-Hans',
-  }.freeze
-
-  def self.google_play_release_notes(changelogs_dir)
-    notes = []
-    GOOGLE_PLAY_LOCALE_MAP.each do |app_locale, play_locale|
-      file = File.join(changelogs_dir, app_locale, 'release_notes.txt')
-      next unless File.exist?(file)
-      text = File.read(file).strip
-      next if text.empty?
-      notes << { language: play_locale, text: text[0, 500] }
+    begin
+      StoreHelper.google_upload(
+        metadata_path: metadata_path, scope: 'notes',
+        track_name: ENV.fetch('TORCHINLANE_TRACK', 'internal'),
+        version_code: ENV.fetch('TORCHINLANE_VERSION_CODE')
+      )
+    ensure
+      FileUtils.remove_entry(metadata_path)
     end
-    notes
-  end
-
-  # Supply (upload_to_play_store) reads changelogs from a metadata directory
-  # tree, not from a release_notes: parameter. It also derives the language
-  # list from the top-level folder names under metadata_path, so those must
-  # be the play_locale codes directly (no extra nesting). Writes
-  # <tmp>/<play_locale>/changelogs/default.txt for every locale that has
-  # release notes and returns the metadata root path, or nil if none do.
-  def self.write_google_play_metadata(changelogs_dir)
-    notes = google_play_release_notes(changelogs_dir)
-    return nil if notes.empty?
-
-    metadata_root = Dir.mktmpdir('torchinlane-supply-metadata')
-    notes.each do |note|
-      dir = File.join(metadata_root, note[:language], 'changelogs')
-      FileUtils.mkdir_p(dir)
-      File.write(File.join(dir, 'default.txt'), note[:text])
-    end
-    metadata_root
-  end
-
-  def self.testflight_changelog(changelogs_dir, locale = 'en')
-    file = File.join(changelogs_dir, locale, 'release_notes.txt')
-    return '' unless File.exist?(file)
-    File.read(file).strip[0, 4000]
-  end
-
-  def self.app_store_release_notes(changelogs_dir)
-    notes = {}
-    APP_STORE_LOCALE_MAP.each do |app_locale, store_locale|
-      next if store_locale.nil?
-      file = File.join(changelogs_dir, app_locale, 'release_notes.txt')
-      next unless File.exist?(file)
-      text = File.read(file).strip
-      next if text.empty?
-      notes[store_locale] = text[0, 4000]
-    end
-    notes
   end
 end
 ''';
@@ -444,7 +394,7 @@ fi
 SKIP_RELEASE_NOTES=1
 if [ "$SHOULD_UPLOAD" = true ]; then
     echo ""
-    printf "${YELLOW}Release notes (source locale: $SOURCE_LOCALE, English).${NC}\n"
+    printf "${YELLOW}Release notes (source locale: $SOURCE_LOCALE).${NC}\n"
     echo "Enter your notes. An empty note is fine. End with an empty line:"
     NOTE=""
     NL="$(printf '\n_')"; NL="${NL%_}"  # newline that survives command substitution
@@ -454,7 +404,7 @@ if [ "$SHOULD_UPLOAD" = true ]; then
     done
 
     SOURCE_NOTE_FILE="$CHANGELOGS_DIR/$SOURCE_LOCALE/release_notes.txt"
-    # Clear all existing locale notes so a stale note is never shipped.
+    # Reset previous notes before collecting this release; retained after upload.
     if command -v torchinlane >/dev/null 2>&1; then
         torchinlane changelog clear >/dev/null 2>&1
     fi
@@ -626,10 +576,7 @@ if [ "$BUILD_IOS" = true ]; then
     fi
 fi
 
-# Clear notes after a successful upload so the next run starts clean.
-if [ "$SHOULD_UPLOAD" = true ] && [ "$SKIP_RELEASE_NOTES" = "0" ] && command -v torchinlane >/dev/null 2>&1; then
-    torchinlane changelog clear >/dev/null 2>&1
-fi
+# Release notes are retained for audit/retry. Use torchinlane changelog clear explicitly.
 
 printf "${GREEN}--- Done ---${NC}\n"
 ''';

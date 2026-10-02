@@ -1,438 +1,394 @@
 # torchinlane
 
-A global Dart CLI for Flutter app distribution: scaffold fastlane, build and
-upload to TestFlight/App Store and Google Play, translate store changelogs
-into 32 locales via the Claude API, and generate store-ready screenshot
-marketing prompts.
+A global Dart CLI and local browser GUI for Flutter releases. Build and upload
+apps, manage localized App Store/Google Play texts and images, translate release
+notes, import credentials, configure signing, and generate GitHub Actions CI.
 
-## Requirements
+Torchinlane runs **outside** your Flutter application. No widget, runtime SDK,
+Node.js installation, or hosted service is needed for Studio.
 
-- Dart SDK `^3.5.0`
-- Flutter project layout (`pubspec.yaml`, `ios/`, `android/`)
-- Ruby (macOS ships one; `brew install ruby` for a newer version)
-- [fastlane](https://fastlane.tools) and, for iOS builds, CocoaPods — both are
-  installed for you by `torchinlane init`, or later with
-  `torchinlane doctor --fix`
-- `ANTHROPIC_API_KEY` env var for `changelog translate`
-- App Store Connect API key (`.p8`) for iOS deploy/changelog push
-- Google Play service account JSON for Android deploy/changelog push
+## Install and upgrade
 
-## Install
+Requirements: Dart `^3.5.0`, a Flutter project with `pubspec.yaml`, `ios/` and
+`android/`, Ruby/Fastlane, and macOS/Xcode for iOS builds. Use a current Fastlane
+release; newer Apple locales and Google OAuth credential support depend on it.
+CocoaPods is required for iOS plugins. `doctor --fix` installs/repairs the gems.
 
 ```bash
 dart pub global activate torchinlane
+# Add ~/.pub-cache/bin to your PATH if needed.
 ```
 
-Make sure `~/.pub-cache/bin` is on your `PATH` so the `torchinlane` executable
-is found:
+For development or a local checkout:
 
 ```bash
-export PATH="$PATH:$HOME/.pub-cache/bin"
+dart pub global activate --source path /path/to/torchinlane
 ```
 
-### Upgrading to a new version
-
-> **Important:** upgrading the CLI does **not** touch already-scaffolded
-> projects. When a new torchinlane version ships, each existing project must run
-> `torchinlane update` to pick up template changes (new `scripts/build.sh`
-> steps, Fastfile fixes, etc.). Skipping it means your project keeps running the
-> old generated files.
+**Upgrade the CLI and update each previously initialized Flutter project.**
+Upgrading the package alone does not regenerate existing Fastfiles.
 
 ```bash
-dart pub global activate torchinlane   # 1. upgrade the CLI itself
-torchinlane update                     # 2. run inside each project to re-sync
+dart pub global activate torchinlane
+cd /path/to/flutter_app
+torchinlane update --dry-run
+torchinlane update -y
 ```
 
-`update` never overwrites your own files (`torchinlane.yaml`, release notes,
-`ExportOptions.plist`) and backs up every changed file as `*.bak`.
+`update` backs up changed generated files as `.bak` and preserves your config,
+store content, release notes and ExportOptions. New generated helpers are
+`fastlane/StoreHelper.rb` and `fastlane/locales.json`; do not edit the registry
+in generated Ruby. See [migration](doc/migration.md).
 
-**First-time users don't need `update`.** A fresh `torchinlane init` always
-generates from the current version's templates, so every change is already
-included. `update` only matters for projects scaffolded by an older CLI.
+## Start with the GUI
 
-## Usage
-
-Run inside any Flutter project (needs `pubspec.yaml`, `ios/`, `android/`).
-
-### `torchinlane init`
-
-Interactively scaffolds `ios/fastlane/`, `android/fastlane/`,
-`fastlane/ChangelogHelper.rb`, `changelogs/<locale>/release_notes.txt`, and a
-`torchinlane.yaml` config file for your project's bundle IDs, team IDs, and
-API keys.
+Run inside your Flutter project:
 
 ```bash
-torchinlane init
+torchinlane studio
 ```
 
-After it finishes, place your credentials at the fixed default paths it
-prints:
+Studio opens an authenticated, loopback-only local panel. Keep the terminal
+open; Ctrl+C stops it. `--no-open` prints the URL, and `--port 8787` selects a
+port. Copy the complete URL, including its session fragment, when opening a
+second browser tab.
 
-- App Store Connect `.p8` key → `ios/fastlane/api_key.p8`
-- Google Play service account JSON → `android/fastlane/fastlane-service-account.json`
+1. **Setup & credentials:** enter app identifiers/team/API IDs, save the
+   configuration, import `.p8`/Google JSON and verify app access. Links and
+   instructions explain the one-time account steps.
+2. **Store content:** add supported locales, edit metadata/release notes and
+   import ready-made screenshots, icons and feature graphics. Reorder images
+   with arrows. Save texts before starting an operation.
+3. **Translation:** select a populated source locale and click **Prepare agent
+   task**. Copy it into Claude Code or Codex working in your Flutter project, then
+   click **Reload agent changes** to reload and validate. No translation API key
+   is required. Existing translations are preserved unless overwrite is enabled.
+   **Translate via optional API** remains available with `ANTHROPIC_API_KEY`.
+4. **Upload & deploy:** validate/export content, upload selected content,
+   compare/import remote texts, or build/upload binaries and store content.
+   Activity shows progress and errors; correct the problem and retry.
 
-Both paths are added to `.gitignore` automatically.
+Studio never sends credentials to a hosted Torchinlane backend. Credentials
+remain on the local machine. Agent tasks are generated locally; you choose
+which coding agent receives the metadata. Optional API translation sends text to Anthropic;
+store operations connect to Apple/Google. The local panel blocks foreign
+origins and concurrent edits while a job runs.
 
-`init` also writes an executable **`scripts/build.sh`** — an interactive,
-menu-driven wrapper for the whole build+deploy flow (see below).
+![Torchinlane Studio store editor](doc/studio.png)
 
-### `scripts/build.sh` — interactive build & deploy
-
-Instead of remembering `torchinlane deploy` flags, run the generated script
-from your project root:
+## Initialize from terminal or CI
 
 ```bash
-sh scripts/build.sh
+torchinlane init                     # interactive setup + tool checks
+torchinlane init --skip-tools        # scaffold without installing gems
+torchinlane init --config /path/to/prepared.yaml --skip-tools
 ```
 
-It walks you through the release step by step, in this order:
+The `--config` form avoids stdin prompts and keeps all supplied configuration.
+`--force` allows replacing an existing initialization. Store content and existing
+ExportOptions are preserved. You can use Studio before `init` to complete setup.
 
-1. **Only-upload mode** — skip building and just upload the AAB/IPA already in
-   `build/` (for retrying a failed upload).
-2. **Platforms** — build Android, iOS, or both.
-3. **Upload + target** — whether to upload, and to Internal (TestFlight / Play
-   Internal testing) or Production (App Store / Play production).
-4. **Release notes** — type your English (source-locale) notes right in the
-   terminal, ending with an empty line. The previous notes are **cleared
-   first** so a stale note is never shipped. An **empty note is allowed** (the
-   stores keep their current text). If `ANTHROPIC_API_KEY` is set, the notes
-   are **translated into every configured locale**; otherwise only the source
-   note ships. Notes are cleared again after a successful upload.
-5. **Version bump** — shows the exact resulting version for each choice before
-   you pick, then runs `torchinlane bump`:
-
-   ```text
-   Version bump — current: 0.1.7
-     1) patch  -> 0.1.8+1   (bug fix; z+1, build+1)
-     2) minor  -> 0.2.0+1   (new feature; y+1, z=0, build+1)
-     3) major  -> 1.0.0+1   (breaking change; x+1, y=z=0, build+1)
-     4) build  -> 0.1.7+1   (same version, build+1 — re-upload)
-     5) skip   -> 0.1.7   (no change)
-   ```
-
-6. **Deep clean** — optionally wipe native caches (`.gradle`, Pods,
-   DerivedData) before building.
-
-Builds are always **obfuscated** with `--split-debug-info` (symbol maps kept
-in `build/debug-info`), and iOS builds verify that **dSYMs** were generated so
-Crashlytics symbolication works. Uploads go through the fastlane lanes that
-`init` scaffolded.
-
-### `torchinlane uninstall`
-
-Removes everything `torchinlane init` created — `ios/fastlane/`,
-`android/fastlane/`, `fastlane/`, `ios/ExportOptions.plist`,
-`scripts/build.sh`, and `torchinlane.yaml`. Leaves `changelogs/` untouched.
+## Localized texts and images
 
 ```bash
-torchinlane uninstall          # asks for confirmation
-torchinlane uninstall --yes    # skip confirmation
+torchinlane store locales --platform ios,android
+torchinlane store init --locales en,tr,de,pt-PT,zh-Hant
+torchinlane store init --locales all   # explicitly opt into all store locales
 ```
 
-### `torchinlane update`
+Files use **native store locale codes**, with separate platform content:
 
-After you upgrade the CLI itself:
+```text
+store/
+  ios/
+    en-US.json
+    tr.json
+    images/tr/iphone/01-home.png
+    images/tr/ipad/01-home.png
+  android/
+    en-US.json
+    tr-TR.json
+    images/tr-TR/phoneScreenshots/01-home.png
+    images/tr-TR/featureGraphic/banner.png
+    images/tr-TR/icon/icon.png
+```
+
+Example Google text file:
+
+```json
+{
+  "title": "My App",
+  "short_description": "Plan your day with ease.",
+  "full_description": "A longer description of the app's actual features.",
+  "release_notes": "Improved reminders and fixed calendar issues."
+}
+```
+
+Apple fields: `name`, `subtitle`, `description`, `keywords`,
+`promotional_text`, `support_url`, `marketing_url`, `privacy_url`,
+`release_notes`. Google fields: `title`, `short_description`,
+`full_description`, `video`, `release_notes`.
+
+**Blank fields are omitted from uploads**, preserving existing remote text.
+Long text is rejected instead of truncated. Images are checked for format,
+dimensions, transparency and count. These checks do not replace store review
+or all device-specific promotional eligibility rules.
 
 ```bash
-dart pub global activate torchinlane   # get the latest CLI
-torchinlane update                     # re-apply its templates to this project
+# Print a task to paste into Claude Code/Codex (no API request):
+torchinlane store translate --from en --locales tr,de,pt-PT
+# Same task; without --locales, use locales already added under store/:
+torchinlane store prompt --from en
+# Optional direct API translation, potentially separately billed:
+torchinlane store translate --api --from en --locales tr,de,pt-PT
+torchinlane store validate
+torchinlane store export --output build/store-export
+torchinlane store push --scope metadata --dry-run
+torchinlane store push --scope metadata
+torchinlane store push --scope images --platform ios,android
+torchinlane store push --scope notes --track production --version-code 42 --app-version 1.2.0
+torchinlane store push --version-code 42 --app-version 1.2.0
 ```
 
-`update` reads your `torchinlane.yaml` and re-renders the generated files —
-iOS/Android Fastfiles + Appfiles, `fastlane/ChangelogHelper.rb`, and
-`scripts/build.sh` — so a project picks up template fixes shipped in a newer
-CLI version. For each file that changed it prints a line diff and asks before
-writing; every overwritten file is backed up as `<file>.bak` (gitignored).
-User-owned files (`ios/ExportOptions.plist`, your release notes, and
-`torchinlane.yaml`) are never touched.
+`--scope` is `all` (default), `metadata`, `images` or `notes`. Google note-only
+updates require an existing `--version-code` on the chosen `--track`; supplied
+notes are merged with existing locales and release status is preserved.
+Apple changes target an editable version; `--app-version` selects its version
+string. Store uploads do not upload binaries, submit Apple review or change
+Google rollout status.
+
+Google synchronizes each supplied screenshot group; omitted groups are
+preserved. Apple adds screenshots by default. **`--replace-images` clears all
+existing screenshot device sets for supplied Apple locales**, then uploads the
+local set. Include every device set you want to retain for those locales.
 
 ```bash
-torchinlane update            # diff + confirm each changed file
-torchinlane update -y         # apply all changes without prompting
-torchinlane update --dry-run  # show what would change, write nothing
+torchinlane store pull                         # save snapshot and report differing fields
+torchinlane store pull --platform ios --app-version 1.2.0
+torchinlane store pull --apply                 # import remote text with .bak backups
 ```
 
-For a full clean regeneration instead (overwrites everything, re-asks the
-prompts), use `torchinlane init --force`.
+Pull downloads text metadata, not screenshot files. Apple notes are included;
+Google pull downloads listing text, not track-specific release notes. Snapshots
+are stored in gitignored `store/.snapshots/`. See [store content reference](doc/store-content.md)
+for image groups, locale policy, field limits and first-release prerequisites.
 
-### `torchinlane deploy`
+## Credentials and signing
 
-Runs `flutter clean && flutter pub get`, builds (obfuscated), and uploads via
-fastlane. Android and iOS build/upload independently — if one fails the
-other still runs, and the command reports which platform(s) failed at the
-end.
+```bash
+torchinlane credentials import --platform ios --file /path/AuthKey_KEYID.p8
+torchinlane credentials import --platform android --file /path/google.json
+torchinlane credentials verify --platform ios,android
+torchinlane doctor --platform android --verify-credentials
+```
+
+Use `--profile company` on import to store a reusable credential outside the
+project, at `~/.torchinlane/credentials/company/`. The config records its absolute
+path; use a different profile name to rotate a key. Existing different keys are
+not silently overwritten. Do not commit a machine-specific config path if other
+machines should use the default; CI can override credential paths.
+
+Environment overrides: `ASC_KEY_PATH`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and
+`GOOGLE_APPLICATION_CREDENTIALS`. Google service account and external-account
+(WIF) JSON are supported. OAuth `authorized_user` JSON needs a current Fastlane
+version with that credential type; Torchinlane does not create an OAuth client
+or consent screen for you.
+
+Google Cloud bootstrap uses your existing `gcloud` login and permissions:
+
+```bash
+gcloud auth login
+torchinlane credentials bootstrap-google --project-id my-cloud-project --dry-run
+torchinlane credentials bootstrap-google --project-id my-cloud-project --create-key
+# Keyless GitHub CI:
+torchinlane credentials bootstrap-google --project-id my-cloud-project --repository OWNER/REPO
+```
+
+It enables APIs, creates/reuses a service account and optionally imports a JSON
+key or creates repository-restricted WIF. You still grant the service account
+app/release permissions in Play Console. The Cloud project must already exist.
+Apple API access and the initial `.p8` download remain account-owner/admin steps.
+
+An Apple `.p8` is not a signing certificate. Automate certificate/profile setup
+with an encrypted private `match` repository:
+
+```bash
+export MATCH_PASSWORD='your repository encryption password'
+torchinlane signing sync --git-url git@github.com:company/ios-certificates.git --write
+# Later machines/CI install existing identities without changing the repository:
+torchinlane signing sync --git-url git@github.com:company/ios-certificates.git
+```
+
+This installs profiles, configures Release/Profile signing in Runner.xcodeproj
+and updates ExportOptions to manual signing with the installed profile. Local
+project/export files receive `.bak` backups. Requires macOS, private repository
+access, appropriate Apple API permissions and a valid developer membership.
+Custom targets/flavors need their own signing configuration.
+
+For Android, reuse the app's existing upload keystore:
+
+```bash
+export KEYSTORE_PASSWORD='...'
+export KEY_PASSWORD='...'
+torchinlane signing android --keystore /path/upload-keystore.jks --alias upload
+```
+
+This copies the keystore to gitignored `.torchinlane/`, writes protected
+`android/key.properties`, and replaces the stock Flutter debug-signing
+placeholder in Groovy/Kotlin Gradle with release signing. Existing custom
+signing blocks are preserved; unsupported layouts produce an actionable error.
+The command imports an existing key; it does not create/replace a published
+app's signing identity. Passwords are read from environment variables, not CLI
+arguments. More: [automation and signing](doc/automation.md).
+
+## Build and deploy
 
 ```bash
 torchinlane deploy --platform ios,android --target internal
-torchinlane deploy --platform ios --target production
-torchinlane deploy --platform android --target production
-torchinlane deploy --platform ios,android --target production
-torchinlane deploy --platform android --target internal --upload-only
-torchinlane deploy --dry-run
+torchinlane deploy --platform ios,android --target production --with-store
+torchinlane deploy --platform android --upload-only --with-store
+torchinlane deploy --dry-run --with-store
 ```
 
-#### Flags
+Live app access is checked before building (skip with `--skip-credential-check`
+when CI already verified it). Android/iOS run independently; failures are reported per platform. `--with-store`
+validates local store content before building and uploads it after binary
+uploads. The Flutter `pubspec.yaml` version selects the Apple version and Google
+version code. Store JSON notes, when supplied, override legacy changelog notes
+for the same release. `--skip-release-notes` skips both sources of release notes.
 
-| Flag | Default | What it does |
-| --- | --- | --- |
-| `--platform` | `ios,android` | Which platform(s) to build/deploy. `ios`, `android`, or `ios,android`. |
-| `--target` | `internal` | `internal` = TestFlight (iOS) / Internal Testing track (Android). `production` = App Store / Play Store production track — see below, this still requires a manual final step. |
-| `--upload-only` | off | Skip `flutter build`; upload the AAB/IPA that's already in `build/`. Useful for retrying a failed upload without rebuilding. |
-| `--skip-clean` | off | Skip `flutter clean && flutter pub get` before building. Faster iteration when you know the build is already clean. |
-| `--deep-clean` | off | Also wipe `android/.gradle`, `android/app/build`, `ios/Pods`, `ios/Podfile.lock` before building. Use when you suspect stale native caches. |
-| `--skip-release-notes` | off | Upload without attaching changelog text, regardless of what's in `changelogs/`. |
-| `--dry-run` | off | Print every command that would run, without executing anything. Good for sanity-checking a config before a real deploy. |
-
-#### `--target internal` — what happens
-
-- **Android**: builds an AAB, uploads it to the Play Console **Internal Testing** track as a draft. Visible immediately to your internal testers list, no review needed.
-- **iOS**: builds an IPA, uploads it to App Store Connect and submits it to **TestFlight**. Available to internal testers right away; external testers need Apple's (usually quick) beta review.
-
-#### `--target production` — what happens
-
-This uploads the build to the production track/App Store, but **does not
-publish it live** — the final "make it public" step is manual, on purpose,
-so a script can never accidentally ship to real users.
-
-- **Android**: uploads the AAB to the Play Console **production** track with
-  `release_status: draft`. It sits there until you go to Play Console →
-  Production → Review release → **Start rollout to production**.
-- **iOS**: uploads the IPA to App Store Connect with `submit_for_review:
-  false` and `automatic_release: false`. The build appears in App Store
-  Connect but is never submitted for review automatically. You attach it to
-  a version and hit **Submit for Review** yourself.
-
-So `torchinlane deploy --target production` gets the binary in front of
-Apple/Google, but you still press the final button in each store's
-dashboard.
-
-### `torchinlane bump`
-
-```bash
-torchinlane bump build   # 1.0.16+57 -> 1.0.16+58
-torchinlane bump patch   # 1.0.16+57 -> 1.0.17+58
-torchinlane bump minor   # 1.0.16+57 -> 1.1.0+58
-torchinlane bump major   # 1.0.16+57 -> 2.0.0+58
-```
-
-### `torchinlane changelog`
-
-Requires `ANTHROPIC_API_KEY` in the environment.
-
-```bash
-torchinlane changelog translate --from en   # writes changelogs/<locale>/release_notes.txt for 31 other locales
-torchinlane changelog push --platform ios,android  # push notes to stores without a binary upload
-torchinlane changelog clear  # empty all release_notes.txt after a release
-```
-
-#### How to update the changelog for a release
-
-`torchinlane init` scaffolds an empty `changelogs/<locale>/release_notes.txt`
-for every locale. `torchinlane deploy` reads these files and attaches them to
-the store upload automatically — **if a file is empty, deploy does not fail,
-it just uploads without release notes for that locale.**
-
-1. **Find your source locale.** It's whatever you entered at the
-   `Source locale for changelog translation` prompt during `torchinlane
-   init` (check `changelogs.source_locale` in `torchinlane.yaml` if you
-   forgot — it defaults to `en`).
-
-2. **Write your release notes into that locale's file.** For example, if
-   your source locale is `en`:
-
-   ```bash
-   echo "Bug fixes and performance improvements." > changelogs/en/release_notes.txt
-   ```
-
-   Or open `changelogs/en/release_notes.txt` in an editor and write freely
-   — multi-line text is fine.
-
-3. **(Optional) Translate to the other 31 store locales** using the Claude
-   API:
-
-   ```bash
-   export ANTHROPIC_API_KEY=your-key
-   torchinlane changelog translate --from en
-   ```
-
-   This reads `changelogs/en/release_notes.txt` and writes a translated
-   version into every other `changelogs/<locale>/release_notes.txt`. Skip
-   this step if you only ship one locale, or want to write translations by
-   hand.
-
-4. **Deploy.** `torchinlane deploy` picks up the notes automatically:
-
-   ```bash
-   torchinlane deploy --platform ios,android --target internal
-   ```
-
-   Pass `--skip-release-notes` to upload a build without attaching any
-   changelog, regardless of what's in the files.
-
-5. **After the release, clear the notes** so next time's changelog doesn't
-   accidentally reuse old text:
-
-   ```bash
-   torchinlane changelog clear
-   ```
-
-If you'd rather push updated release notes to the stores without shipping a
-new binary (e.g. you forgot to add notes to an already-uploaded build), use:
-
-```bash
-torchinlane changelog push --platform ios,android
-```
-
-### `torchinlane screenshots`
-
-```bash
-torchinlane screenshots capture --platform ios --locale en   # interactive: navigate, press Enter, repeat
-torchinlane screenshots prompts   # analyzes the project and writes screenshots/store_prompts.md
-```
-
-### `torchinlane doctor`
-
-Checks everything a deploy needs — the toolchain on your machine and the
-configuration in your project — and can repair the toolchain for you.
-
-```bash
-torchinlane doctor         # report only
-torchinlane doctor --fix   # install/repair missing tools, then report
-```
-
-It verifies, in order:
-
-| Check | Required |
+| Flag | Behavior |
 | --- | --- |
-| `flutter`, `ruby` on `PATH` | yes |
-| `fastlane` installed and runnable | yes |
-| `cocoapods` (`pod`) installed and runnable | on macOS only |
-| Inside a Flutter project, `torchinlane.yaml` present and valid | yes |
-| App Store Connect key at `ios.asc_key_path` | yes |
-| Play service account JSON at `android.service_account_json` | yes |
-| `ios/ExportOptions.plist`, `changelogs/` directory | yes |
-| `ANTHROPIC_API_KEY` set (for `changelog translate` / `screenshots prompts`) | no |
-| `xcrun`, `adb` on `PATH` | no |
+| `--platform` | `ios`, `android`, or `ios,android` |
+| `--target` | `internal` (default) or `production` |
+| `--upload-only` | Reuse existing AAB/IPA |
+| `--skip-clean` | Skip Flutter clean/pub get |
+| `--skip-credential-check` | Skip the automatic pre-build live app-access check |
+| `--deep-clean` | Remove native build caches before building |
+| `--skip-release-notes` | Upload without release notes |
+| `--with-store` | Upload saved store content after binaries |
+| `--release-status` | Google `draft` (default), `completed`, or `inProgress` |
+| `--rollout` | Fraction between 0 and 1, required with `inProgress` |
+| `--dry-run` | Print/validate commands without uploading/building |
 
-A healthy project looks like this — `✓` passed, `~` optional and absent,
-`✗` failed:
+**Draft Google builds are not served to testers or users.** For an automated
+internal release or production rollout, explicitly select the serving status:
 
-```text
-✓ flutter on PATH
-✓ ruby on PATH
-✓ fastlane 2.230.0
-✓ pod 1.16.2
-✓ Flutter project found at /Users/you/dev/myapp
-✓ torchinlane.yaml found
-✓ torchinlane.yaml is valid
-✓ App Store Connect key: ios/fastlane/api_key.p8
-✓ Play service account: android/fastlane/fastlane-service-account.json
-✓ ios/ExportOptions.plist
-✓ changelogs/ directory
-✓ ANTHROPIC_API_KEY set (needed for `changelog translate` / `screenshots prompts`)
-~ xcrun on PATH (optional)
-~ adb on PATH (optional)
-
-All checks passed.
+```bash
+torchinlane deploy --platform android --target internal --release-status completed
+torchinlane deploy --platform android --target production --release-status inProgress --rollout 0.1
 ```
 
-Exit code is `0` when every required check passes, `1` otherwise — so it is
-safe to gate a CI job on it.
+Google reviews/account restrictions can still apply. Apple production uploads
+remain unsubmitted (`submit_for_review: false`, `automatic_release: false`);
+submit the final version through App Store Connect. TestFlight uploads attach
+localized What to Test text and wait for processing when notes are supplied
+(up to 30 minutes); tester assignment and external beta review remain Apple
+requirements.
 
-#### Toolchain problems it detects and fixes
+The generated `sh scripts/build.sh` remains available for terminal-guided
+build/version/release-note prompts. Release notes are retained after successful
+upload for audit and retry; use `changelog clear` explicitly to remove them.
 
-fastlane and CocoaPods are both Ruby gems, so one broken Ruby setup breaks
-them together. `doctor` reports *why* a tool is unusable rather than just
-"not found", because each cause needs a different fix:
+## Generate GitHub Actions
 
-```text
-✗ pod found on PATH but not in a valid state
-  -> run `torchinlane doctor --fix` to install/repair it
-✗ fastlane installed at /Users/you/.gem/ruby/2.6.0/bin but not on PATH
-  -> run `torchinlane doctor --fix` to install/repair it
+```bash
+torchinlane ci init --platform android
+torchinlane ci init --platform ios,android \
+  --wif-provider projects/123/locations/global/workloadIdentityPools/torchinlane-github/providers/github-ID \
+  --service-account torchinlane@my-cloud-project.iam.gserviceaccount.com \
+  --signing-git-url git@github.com:company/ios-certificates.git
 ```
 
-- **not in a valid state** — the gem is installed but won't execute, usually
-  after a macOS or Xcode upgrade swapped the system Ruby underneath it. This
-  is the cause of the `CocoaPods not installed or not in valid state` error
-  during an iOS build. `--fix` reinstalls the gem.
-- **installed but not on PATH** — the gem exists in a gem bin directory your
-  shell never exported, so `fastlane` appears missing even though it isn't.
-  `--fix` appends that directory to your shell profile.
-- **not installed** — `--fix` installs the latest published version.
+Generates `.github/workflows/torchinlane.yml` with manual dispatch, independent
+platform jobs, tool setup, credential restoration, signing, app-access checks
+and optional store upload. The package version is pinned to the installed CLI
+version for reproducible activation. Local development versions must be published
+first or use a private/local source installation. Use `--flutter-version` to pin Flutter;
+`stable` is the default. Existing workflows need `--force` and receive backups.
+Set up secrets as described in [automation](doc/automation.md). The generated
+iOS job deliberately requires a signing repository or your own signing step.
 
-`--fix` installs with `gem install --no-document`, and falls back to
-`--user-install` when the active gem directory isn't writable (macOS system
-Ruby) instead of escalating to `sudo`. After installing CocoaPods it runs
-`pod setup` so your first `pod install` doesn't fail on a missing spec repo.
+## Existing commands
 
-> **Reload your shell after a PATH fix.** A profile export can't change the
-> shell that's already running, so run `source ~/.zshrc` (or open a new
-> terminal) before the new binary is visible to *you*. `torchinlane deploy`
-> itself doesn't need this — it prepends the gem bin directories to `PATH`
-> for the commands it launches.
+```bash
+torchinlane bump patch               # major/minor/patch/build
+torchinlane changelog translate --from en
+torchinlane changelog push --platform android --track production --version-code 42
+torchinlane changelog push --platform ios --app-version 1.2.0
+torchinlane changelog clear
+torchinlane screenshots capture --platform ios --locale tr
+torchinlane screenshots prompts
+torchinlane doctor --fix
+torchinlane uninstall --yes
+```
 
-You rarely need to run `--fix` by hand: `torchinlane init` sets up the
-toolchain during first-time setup, and `torchinlane deploy` verifies it before
-building.
+Legacy notes live at `changelogs/<locale>/release_notes.txt`. The default 32
+source locales remain for compatibility; configure more native/alias locales
+in `torchinlane.yaml`. A locale unsupported by a store is reported and skipped.
+Duplicate source folders mapping to the same store locale fail explicitly.
+Google/Apple notes have separate 500/4000 character validation.
+
+Screenshot capture is interactive and captures the **current app screen**;
+`--locale` labels the output, it does not switch the app's language. Android
+capture now reads binary PNG output correctly. Prompts produce Markdown, not
+finished artwork. Fully automatic navigation/capture requires app-specific
+integration/UI tests and is not generated by this package.
+
+Only optional `store translate --api`, legacy `changelog translate` and AI
+screenshot prompts use `ANTHROPIC_API_KEY` and the configurable
+`TORCHINLANE_AI_MODEL` (default `claude-sonnet-4-6`). Translation outputs are
+checked for complete fields and character limits. Failed translations do not
+write invalid content. Translation is optional; manually authored content
+requires no AI key. Agent task generation also requires no AI key or network.
+Agent usage follows the chosen tool’s own subscription and limits.
+
+`uninstall` removes the generated Fastlane/config/build wrapper/ExportOptions;
+`changelogs/`, `store/`, signing files and generated CI workflows remain yours.
 
 ## Configuration
 
-`torchinlane init` writes `torchinlane.yaml` to your project root. It is safe
-to commit — it holds paths and IDs, not secrets. Credential paths
-(`asc_key_path`, `service_account_json`) are fixed defaults, not prompted
-for, and are added to `.gitignore` automatically.
-
 ```yaml
-app_name: MyApp
+app_name: "My App"
 ios:
-  bundle_id: com.example.myapp
-  team_id: ABCDE12345
-  itc_team_id: ABCDE12345 # optional, defaults to team_id
-  apple_id: you@example.com
-  asc_key_id: XXXXXXXXXX
-  asc_issuer_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-  asc_key_path: ios/fastlane/api_key.p8 # fixed default, not prompted
-  firebase_crashlytics: false # optional, uploads dSYMs when true
+  bundle_id: "com.example.app"
+  team_id: "ABCDE12345"
+  itc_team_id: "123456789" # optional, defaults to team_id
+  apple_id: "dev@example.com"
+  asc_key_id: "KEYID"
+  asc_issuer_id: "issuer-uuid" # empty for individual API keys
+  asc_key_path: "ios/fastlane/api_key.p8"
+  firebase_crashlytics: false
+  firebase_app_id: ""
 android:
-  package_name: com.example.myapp
-  service_account_json: android/fastlane/fastlane-service-account.json # fixed default, not prompted
+  package_name: "com.example.app"
+  service_account_json: "android/fastlane/fastlane-service-account.json"
+  firebase_app_id: ""
 changelogs:
-  dir: changelogs # optional
-  source_locale: en # optional
-  locales: [ar, bn, cs, ...] # optional, defaults to 32 store locales
+  dir: "changelogs"
+  source_locale: "en"
+  locales: [en, tr, de, en-GB, pt-PT, zh-Hant]
 build:
   obfuscate: true
-  split_debug_info: build/debug-info
-screenshots:
-  output_dir: screenshots
-  ios_devices: []
-  android_devices: []
-  locales: [en]
+  split_debug_info: "build/debug-info"
 ```
 
-## Troubleshooting
+Config contains IDs and paths, not key contents. Strings are quoted on render
+to preserve names containing colons and numeric-looking IDs. Credential paths
+are honored by all generated lanes; CI environment overrides take precedence.
+`screenshots` settings in older configs are reserved; current capture uses the
+`screenshots/` directory and connected/booted devices.
 
-- **`torchinlane: command not found`** — `~/.pub-cache/bin` is not on `PATH`
-  (see Install above).
-- **`torchinlane doctor` fails on fastlane or CocoaPods** — run
-  `torchinlane doctor --fix`, which installs what's missing, reinstalls what's
-  broken, and fixes `PATH`. Then reload your shell (`source ~/.zshrc`).
-- **`CocoaPods not installed or not in valid state` during an iOS build** —
-  the gem is installed but can't run, usually after a macOS or Xcode upgrade
-  changed the system Ruby. `torchinlane doctor --fix` reinstalls it.
-- **`fastlane` works in your terminal but `doctor` says it's missing** — its
-  gem bin directory isn't exported on `PATH`. `torchinlane doctor --fix` adds
-  it to your shell profile.
-- **`changelog translate` errors with a missing key** — export
-  `ANTHROPIC_API_KEY` in your shell before running the command.
-- **Deploy fails to authenticate with App Store Connect** — verify
-  `asc_key_path` points at a valid `.p8` file and `asc_key_id`/`asc_issuer_id`
-  match the key generated in App Store Connect > Users and Access > Keys.
-- **Deploy fails to authenticate with Google Play** — verify the service
-  account JSON path is correct and the service account has been granted
-  access to the app in Play Console.
+## Verification
 
-## License
+```bash
+dart analyze
+dart test
+```
 
-MIT
+Tests cover locales, partial-content preservation, Unicode limits, image
+validation, translation failures, credentials, signing/CI generation, GUI HTTP
+flows, and generated Ruby/shell behavior. They do not perform authenticated
+live store uploads. See [implementation report](doc/implementation-report.tr.md).
+
+MIT license.

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:args/command_runner.dart';
 
 import '../config/torchinlane_config.dart';
@@ -10,9 +12,14 @@ import '../shell/toolchain.dart';
 class InitCommand extends Command<int> {
   InitCommand({Logger logger = const Logger()}) : _logger = logger {
     argParser
-      ..addFlag('force', help: 'Overwrite existing fastlane setup.', negatable: false)
+      ..addOption('config',
+          help:
+              'Prepared torchinlane.yaml; initialize without terminal prompts.')
+      ..addFlag('force',
+          help: 'Overwrite existing fastlane setup.', negatable: false)
       ..addFlag('skip-tools',
-          help: 'Do not install/verify fastlane and CocoaPods.', negatable: false);
+          help: 'Do not install/verify fastlane and CocoaPods.',
+          negatable: false);
   }
 
   final Logger _logger;
@@ -21,19 +28,40 @@ class InitCommand extends Command<int> {
   String get name => 'init';
 
   @override
-  String get description => 'Scaffold fastlane + torchinlane.yaml for this Flutter project.';
+  String get description =>
+      'Scaffold fastlane + torchinlane.yaml for this Flutter project.';
 
   @override
   Future<int> run() async {
     final project = FlutterProject.findRoot();
     if (project == null) {
-      _logger.error('Not inside a Flutter project (need pubspec.yaml + ios/ + android/).');
+      _logger.error(
+          'Not inside a Flutter project (need pubspec.yaml + ios/ + android/).');
       return 1;
     }
 
     final force = argResults!['force'] as bool;
     if (project.torchinlaneConfigFile.existsSync() && !force) {
-      _logger.info('torchinlane.yaml already exists. Use --force to overwrite.');
+      _logger
+          .info('torchinlane.yaml already exists. Use --force to overwrite.');
+      return 0;
+    }
+
+    final configPath = argResults!['config'] as String?;
+    if (configPath != null) {
+      final source = File(configPath);
+      final content = source.readAsStringSync();
+      final config = TorchinlaneConfig.load(source);
+      if (!(argResults!['skip-tools'] as bool)) await _setupTools();
+      FastlaneScaffolder(project).scaffold(
+          appName: config.appName,
+          ios: config.ios,
+          android: config.android,
+          sourceLocale: config.changelogs.sourceLocale,
+          changelogsDir: config.changelogs.dir);
+      project.torchinlaneConfigFile.writeAsStringSync(content);
+      _logger.success(
+          'Initialized from $configPath. Run credentials verify after importing keys.');
       return 0;
     }
 
@@ -52,9 +80,11 @@ class InitCommand extends Command<int> {
     final ascKeyId = ask('App Store Connect API Key ID');
     final ascIssuerId = ask('App Store Connect API Issuer ID');
     const ascKeyPath = 'ios/fastlane/api_key.p8';
-    final firebaseCrashlytics = askYesNo('Upload dSYMs to Firebase Crashlytics?');
+    final firebaseCrashlytics =
+        askYesNo('Upload dSYMs to Firebase Crashlytics?');
     final iosFirebaseAppId = firebaseCrashlytics
-        ? ask('iOS Firebase App ID for symbol upload (e.g. 1:123:ios:abc, blank to skip)',
+        ? ask(
+            'iOS Firebase App ID for symbol upload (e.g. 1:123:ios:abc, blank to skip)',
             defaultValue: '')
         : '';
 
@@ -66,7 +96,8 @@ class InitCommand extends Command<int> {
         defaultValue: '');
 
     _logger.info('\n--- Changelogs ---');
-    final sourceLocale = ask('Source locale for changelog translation', defaultValue: 'en');
+    final sourceLocale =
+        ask('Source locale for changelog translation', defaultValue: 'en');
 
     final ios = IosConfig(
       bundleId: bundleId,
@@ -86,12 +117,18 @@ class InitCommand extends Command<int> {
     );
 
     final scaffolder = FastlaneScaffolder(project);
-    scaffolder.scaffold(appName: appName, ios: ios, android: android, sourceLocale: sourceLocale);
+    scaffolder.scaffold(
+        appName: appName,
+        ios: ios,
+        android: android,
+        sourceLocale: sourceLocale);
 
     _logger.success('\nFastlane scaffold created.');
     _logger.info('Next steps:');
-    _logger.info('  1. Place your App Store Connect API key at: ${ios.ascKeyPath}');
-    _logger.info('  2. Place your Google Play service account JSON at: ${android.serviceAccountJson}');
+    _logger.info(
+        '  1. Place your App Store Connect API key at: ${ios.ascKeyPath}');
+    _logger.info(
+        '  2. Place your Google Play service account JSON at: ${android.serviceAccountJson}');
     _logger.info('  3. Run `torchinlane doctor` to verify your setup.');
     _logger.info('  4. Build & deploy interactively with: sh scripts/build.sh');
 
@@ -126,5 +163,6 @@ void writeScaffoldNonInteractive({
   required AndroidConfig android,
   required String sourceLocale,
 }) {
-  FastlaneScaffolder(project).scaffold(appName: appName, ios: ios, android: android, sourceLocale: sourceLocale);
+  FastlaneScaffolder(project).scaffold(
+      appName: appName, ios: ios, android: android, sourceLocale: sourceLocale);
 }

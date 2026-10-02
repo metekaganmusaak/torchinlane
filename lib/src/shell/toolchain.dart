@@ -85,7 +85,8 @@ class Toolchain {
             version: version, binDir: File(onPath).parent.path);
       }
       // Resolves but won't run: broken install, not a missing one.
-      return ToolReport(gem, ToolStatus.broken, binDir: File(onPath).parent.path);
+      return ToolReport(gem, ToolStatus.broken,
+          binDir: File(onPath).parent.path);
     }
 
     final strayBin = _findGemBinOffPath(gem.binary);
@@ -138,6 +139,7 @@ class Toolchain {
   /// shell profile when the gem exists but is invisible. Returns the report
   /// after the repair attempt.
   Future<ToolReport> ensure(RubyGem gem, {bool assumeYes = false}) async {
+    assumeYes = assumeYes || Platform.environment['CI'] == 'true';
     var report = inspect(gem);
     if (report.usable) return report;
 
@@ -199,13 +201,14 @@ class Toolchain {
     _logger.info('\$ gem ${args.join(' ')}');
     if (reinstall) {
       // Best-effort: clears a half-written gem that makes `pod` throw.
-      await runStreamed('gem', ['uninstall', gem.gemName, '--all', '--executables', '--force']);
+      await runStreamed('gem',
+          ['uninstall', gem.gemName, '--all', '--executables', '--force']);
     }
 
     final result = await runStreamed('gem', args);
     if (!result.success) {
-      _logger.error(
-          'Failed to install ${gem.gemName} (exit ${result.exitCode}).');
+      _logger
+          .error('Failed to install ${gem.gemName} (exit ${result.exitCode}).');
       _logger.info('Try manually: gem install ${gem.gemName}'
           '${userInstall ? ' --user-install' : ''}');
       return false;
@@ -253,7 +256,8 @@ class Toolchain {
     }
     if (_home.isEmpty) return false;
 
-    if (!assumeYes && !_confirm('Add $dir to your PATH in your shell profile?')) {
+    if (!assumeYes &&
+        !_confirm('Add $dir to your PATH in your shell profile?')) {
       _logger.info('Skipped. Add it manually: export PATH="$dir:\$PATH"');
       return false;
     }
@@ -283,13 +287,15 @@ class Toolchain {
       wrote = true;
     }
 
-    _logger.info('Run `source ~/.zshrc` (or open a new terminal) to pick it up.');
+    _logger
+        .info('Run `source ~/.zshrc` (or open a new terminal) to pick it up.');
     return wrote;
   }
 
   /// Environment for child processes, with every known gem bin dir prepended to
   /// PATH so a freshly installed gem works in this same run without a reload.
-  Map<String, String> augmentedEnvironment([Map<String, String> extra = const {}]) {
+  Map<String, String> augmentedEnvironment(
+      [Map<String, String> extra = const {}]) {
     final env = Map<String, String>.from(Platform.environment)..addAll(extra);
     final separator = Platform.isWindows ? ';' : ':';
     final current = (env['PATH'] ?? '').split(separator);
