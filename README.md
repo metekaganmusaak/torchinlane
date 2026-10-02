@@ -53,20 +53,36 @@ open; Ctrl+C stops it. `--no-open` prints the URL, and `--port 8787` selects a
 port. Copy the complete URL, including its session fragment, when opening a
 second browser tab.
 
-1. **Setup & credentials:** enter app identifiers/team/API IDs, save the
-   configuration, import `.p8`/Google JSON and verify app access. Links and
-   instructions explain the one-time account steps.
-2. **Store content:** add supported locales, edit metadata/release notes and
-   import ready-made screenshots, icons and feature graphics. Reorder images
-   with arrows. Save texts before starting an operation.
-3. **Translation:** select a populated source locale and click **Prepare agent
-   task**. Copy it into Claude Code or Codex working in your Flutter project, then
-   click **Reload agent changes** to reload and validate. No translation API key
-   is required. Existing translations are preserved unless overwrite is enabled.
-   **Translate via optional API** remains available with `ANTHROPIC_API_KEY`.
-4. **Upload & deploy:** validate/export content, upload selected content,
-   compare/import remote texts, or build/upload binaries and store content.
-   Activity shows progress and errors; correct the problem and retry.
+Studio now opens a **readiness overview** in Turkish. Select App Store, Google
+Play, or both. It detects existing files and tells you which steps are complete,
+which checks have not run, and what can be skipped. No setup is repeated merely
+because you opened the panel.
+
+1. **Kurulum (setup):** existing values are loaded. Save only changed/missing
+   settings. Valid credential files are recognized; import controls collapse
+   when a file is present. Live access is a separate check, remembered for this
+   server session and invalidated when credentials/app identity change.
+2. **Metinler (texts):** open the configured source language and write app texts
+   and release notes. Common fields can be copied from the other store into
+   empty fields. Existing texts can be left alone. Advanced fields are collapsed.
+3. **Çeviri (translation):** add target languages, click **Çeviri görevini hazırla**,
+   then **Görevi kopyala**. Paste into Claude Code/Codex working in the Flutter
+   project. When finished, click **Sonuçları yükle ve kontrol et**. Counts show
+   missing fields; completed translations can be skipped. No translation API key
+   is required. Paid API and overwrite options remain under advanced details.
+4. **Görseller (images):** add files per language/device, only if replacing or
+   adding images. Existing remote images do not need to be re-imported.
+5. **Gönder (upload):** the default is app metadata only. Check the upload plan,
+   then send content. Google version/track fields appear when notes are selected.
+   Building/uploading a new app binary is a separate collapsed section.
+
+Read the [Turkish step-by-step quick start](doc/quick-start.tr.md). You can prepare
+content without store credentials, Ruby/Fastlane, or native signing. Before
+upload, check account access and tools in Setup. Imzalama (signing) matters for
+new app builds, not metadata-only upload. Tool checks do not install anything;
+repair is an explicit action. Existing signing files are only evidence of setup,
+not proof that a release build will succeed. Optional API translation requires
+`ANTHROPIC_API_KEY`; it is not part of the default translation workflow.
 
 Studio never sends credentials to a hosted Torchinlane backend. Credentials
 remain on the local machine. Agent tasks are generated locally; you choose
@@ -74,7 +90,7 @@ which coding agent receives the metadata. Optional API translation sends text to
 store operations connect to Apple/Google. The local panel blocks foreign
 origins and concurrent edits while a job runs.
 
-![Torchinlane Studio store editor](doc/studio.png)
+![Torchinlane Studio guided readiness overview](doc/studio.png)
 
 ## Initialize from terminal or CI
 

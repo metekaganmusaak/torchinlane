@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.1
+
+- Replace Studio's crowded screens with a Turkish step-by-step workflow:
+  readiness overview, setup, source texts, translation, images and upload.
+- Detect existing configuration, generated file versions, credential formats,
+  source texts, missing translations and local images. Explain which steps can
+  be skipped and show only the selected store's setup. Remember store selection.
+- Separate local credential presence from live app-access verification. Cache
+  successful verification for the current server session and invalidate it when
+  the app identity or credential contents change.
+- Simplify API-free translation to add languages, copy an agent task, then reload
+  and validate its results. Show language names and missing-field counts; skip
+  completed translation tasks. Move API/overwrite/bulk options under details.
+- Reuse common source text between stores without overwriting populated fields;
+  reject incompatible limits before writing. Default standalone uploads to
+  metadata and request Google version/track only when notes are included.
+- Add explicit, non-installing tool checks and distinguish store-content upload
+  from building/signing an app. Keep advanced operations available in details.
+- Preserve the Studio session on browser reload. Avoid rewriting unchanged
+  generated/configuration files. Mark the AI key optional in doctor and add
+  `torchinlane --version` / `-v`.
+- Update screenshots, usage documentation and the Turkish quick-start guide.
+  Validate readiness/source reuse with automated tests and the wizard in Chrome
+  on desktop/mobile; no live store upload is performed by these checks.
+
 ## 0.2.0
 
 ### Upgrade notes

@@ -102,7 +102,8 @@ class Credentials {
         changelogsDir: config.changelogs.dir);
     for (final entry in files.entries) {
       final file = File('${project.root.path}/${entry.key}');
-      if (file.existsSync() && file.readAsStringSync() != entry.value) {
+      if (file.existsSync()) {
+        if (file.readAsStringSync() == entry.value) continue;
         file.copySync('${file.path}.bak');
       }
       file.parent.createSync(recursive: true);

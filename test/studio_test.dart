@@ -51,6 +51,65 @@ void main() {
     expect((await request('/api/state')).$2['available']['ios'],
         contains('bn-BD'));
   });
+  test(
+      'wizard reports existing setup, sync is idempotent, malformed config remains visible',
+      () async {
+    final state = (await request('/api/state')).$2;
+    expect(state['readiness']['platforms']['android']['scaffoldReady'], isTrue);
+    final helper = File('${project.root.path}/fastlane/StoreHelper.rb');
+    final originalTime = helper.lastModifiedSync();
+    expect((await request('/api/sync', data: {})).$1, 200);
+    expect(helper.lastModifiedSync(), originalTime);
+    project.torchinlaneConfigFile.writeAsStringSync('bad: [');
+    final malformed = await request('/api/state');
+    expect(malformed.$1, 200);
+    expect(malformed.$2['readiness']['configError'], isNotNull);
+  });
+  test(
+      'source reuse preserves target fields and rejects incompatible notes atomically',
+      () async {
+    await request('/api/save', data: {
+      'platform': 'ios',
+      'locale': 'en-US',
+      'fields': {
+        'name': 'Source Brand',
+        'description': 'Calendar',
+        'release_notes': 'ü' * 501
+      }
+    });
+    await request('/api/save', data: {
+      'platform': 'android',
+      'locale': 'en-US',
+      'fields': {'title': 'Existing'}
+    });
+    final target = File('${project.root.path}/store/android/en-US.json');
+    final before = target.readAsStringSync();
+    expect(
+        (await request('/api/copy-source', data: {'platform': 'android'})).$1,
+        400);
+    expect(target.readAsStringSync(), before);
+    await request('/api/save', data: {
+      'platform': 'ios',
+      'locale': 'en-US',
+      'fields': {
+        'name': 'Source Brand',
+        'description': 'Calendar',
+        'release_notes': 'Fixes'
+      }
+    });
+    expect(
+        (await request('/api/copy-source', data: {'platform': 'android'})).$1,
+        200);
+    expect(jsonDecode(target.readAsStringSync()), {
+      'title': 'Existing',
+      'full_description': 'Calendar',
+      'release_notes': 'Fixes'
+    });
+    expect(
+        (await request('/api/copy-source', data: {'platform': '../../keys'}))
+            .$1,
+        400);
+  });
   test('GUI prepares agent task without credentials and keeps files unchanged',
       () async {
     await request('/api/init', data: {

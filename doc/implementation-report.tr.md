@@ -175,7 +175,7 @@ Detaylar: [README](../README.md), [mağaza içerikleri](store-content.md),
 
 `store translate` varsayılan olarak API çağırmak yerine Claude Code/Codex'e
 yapıştırılacak görevi üretir; `store prompt` aynı akışın açık isimli komutudur.
-GUI'de Prepare agent task / Copy task / Reload agent changes eklendi. Kaynak
+GUI’de çeviri görevi hazırlama / kopyalama / sonuçları yeniden yükleme eklendi. Kaynak
 metinler ve mevcut hedef dosyaların snapshot'ları, yalnızca izin verilen dosya
 yolları, eksik alanlar, platforma özgü dil kodları ve alan sınırları göreve
 eklenir. Yeni değişiklikleri ezmeme, marka/URL/placeholder koruma ve sonuçları
@@ -192,3 +192,28 @@ derlenmiş CLI'da `translate` ve `prompt` çalıştırıldı; hedef dosyaların 
 kontrol edildi. Gerçek Chrome testinde görev hazırlama/kopyalama, ajanın dosya
 değişikliklerini yeniden yükleme ve doğrulama akışı masaüstü/mobil panelde
 kontrol edildi; JavaScript hatası bulunmadı.
+
+## 0.2.1 — yönlendirilmiş Studio akışı
+
+Panel Türkçe, adım adım bir akışa dönüştürüldü: Başlangıç → Kurulum → Metinler
+→ Çeviri → Görseller → Gönder. Başlangıç ekranı mevcut ayarları, yardımcı
+dosyaların güncelliğini, kimlik dosyası biçimini, kaynak metinleri, eksik çeviri
+alanlarını ve görsel sayısını kontrol eder. Gerekmeyen adımlar açıkça belirtilir;
+seçilmeyen mağazanın kurulumu gösterilmez. Dosya bulunması canlı mağaza erişimi
+olarak sunulmaz. Başarılı canlı kontroller sunucu oturumunda tutulur; kimlik veya
+anahtar değişirse geçersizleşir. Yeniden başlatmada anahtarın yeniden yüklenmesi
+gerekmez, fakat canlı erişim kontrolü yenilenir.
+
+Çeviri akışı dört net adıma ayrıldı; mevcut dolu alanlar korunur ve eksik alan
+sayısı gösterilir. Ortak kaynak alanları diğer mağazadan boş alanlara alınabilir;
+hedef sınırına uymayan metinlerde dosya yazılmaz. API/overwrite/tüm diller
+seçenekleri ileri seçeneklere taşındı. Yükleme varsayılan olarak yalnızca uygulama
+metinlerini gönderir; Google build numarası sürüm notları seçilince gösterilir.
+Build ve imzalama ayrı, gerektiğinde açılan bir bölümdür. Araç kontrolü açık
+bir işlem olarak yapılır ve hiçbir şey kurmaz. Değişmeyen yardımcı dosyalar
+tekrar yazılmaz. Tarayıcı yenilemesinde oturum kaybı düzeltildi.
+
+57 test geçti; kod analizi temiz. Gerçek Chrome'da sıfırdan Android kurulumu,
+Türkçe kaynak metin, ajan görevi/kopyalama/yeniden yükleme, tamamlanan çeviriyi
+atlama, görsel ekleme, sürüm numarası istemeyen metadata planı, mevcut kimliği
+atlama ve sayfa yenileme akışı masaüstü/mobil boyutlarda doğrulandı.

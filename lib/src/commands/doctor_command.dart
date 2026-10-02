@@ -14,6 +14,9 @@ import '../shell/toolchain.dart';
 class DoctorCommand extends Command<int> {
   DoctorCommand({Logger logger = const Logger()}) : _logger = logger {
     argParser
+      ..addFlag('tools-only',
+          negatable: false,
+          help: 'Check/repair tools without requiring project credentials.')
       ..addFlag('verify-credentials',
           negatable: false, help: 'Check live store app access.')
       ..addOption('platform', defaultsTo: 'ios,android')
@@ -48,6 +51,11 @@ class DoctorCommand extends Command<int> {
     if (platforms.contains('ios')) {
       ok &= await _checkGem(RubyGem.cocoapods,
           fix: fix, required: Platform.isMacOS);
+    }
+
+    if (argResults!['tools-only'] as bool) {
+      _logger.info(ok ? 'Tool checks passed.' : 'Some tools need attention.');
+      return ok ? 0 : 1;
     }
 
     final project = FlutterProject.findRoot();
@@ -115,7 +123,8 @@ class DoctorCommand extends Command<int> {
     final hasAnthropicKey =
         Platform.environment.containsKey('ANTHROPIC_API_KEY');
     _report(hasAnthropicKey,
-        'ANTHROPIC_API_KEY set (needed for `changelog translate` / `screenshots prompts`)');
+        'ANTHROPIC_API_KEY (optional; store agent tasks do not need it)',
+        required: false);
 
     ok &= _checkBinary('xcrun', required: false);
     ok &= _checkBinary('adb', required: false);

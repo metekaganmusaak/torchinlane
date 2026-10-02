@@ -78,14 +78,14 @@ uses the JSON locales already present for each store. `--locales all` includes
 all supported native locales per store; unsupported codes are omitted separately
 for each store. No files are changed during task generation.
 
-In Studio choose **Prepare agent task**, then **Copy task**. Paste it into
+In Studio choose **Çeviri görevini hazırla**, then **Görevi kopyala**. Paste it into
 Claude Code or Codex working in the Flutter project. The generated task includes
 exact allowed target paths, source/target snapshots, pending fields, native locale
 codes and limits. It instructs the agent to preserve existing translations and
 URLs, protect newer edits, avoid invented features, and validate the result.
 `--overwrite` explicitly permits replacing the listed translated fields. Review
 the agent's diff; instructions are guidance to that agent, not a sandbox enforced
-by Torchinlane. Click **Reload agent changes** to reload and validate in Studio.
+by Torchinlane. Click **Sonuçları yükle ve kontrol et** to reload and validate in Studio.
 No translation API key is needed by Torchinlane; the coding agent's own usage
 limits still apply. Tasks contain selected store text, so share them deliberately.
 

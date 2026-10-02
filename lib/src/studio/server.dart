@@ -10,6 +10,8 @@ import '../project/flutter_project.dart';
 import '../scaffold/fastlane_scaffolder.dart';
 import '../setup/credentials.dart';
 import '../store/content.dart';
+import '../shell/toolchain.dart';
+import 'readiness.dart';
 import '../store/service.dart';
 import '../store/translation.dart';
 import '../store/translation_task.dart';
@@ -28,6 +30,9 @@ class StudioServer {
     'logs': <String>[],
     'exitCode': null
   };
+  final Map<String, String> _verified = {};
+  final Map<String, dynamic> _tools = {};
+  StudioReadiness get readiness => StudioReadiness(project);
   bool get busy => job['running'] == true || _writing;
   StoreContent get content => StoreContent(project);
 
@@ -108,11 +113,11 @@ class StudioServer {
       }
       dynamic result;
       if (request.method == 'GET' && request.uri.path == '/api/state') {
-        final config = project.torchinlaneConfigFile.existsSync()
-            ? TorchinlaneConfig.load(project.torchinlaneConfigFile)
-            : null;
+        final config = readiness.config;
         result = {
           'configured': config != null,
+          'projectPath': project.root.path,
+          'readiness': readiness.snapshot(verified: _verified, tools: _tools),
           'appName': config?.appName ?? project.readAppName(),
           'fields': storeFields,
           'groups': imageGroups,
@@ -166,6 +171,58 @@ class StudioServer {
         try {
           final data = await _body(request);
           switch (request.uri.path) {
+            case '/api/copy-source':
+              final platform = data['platform'] as String;
+              if (!['ios', 'android'].contains(platform)) {
+                throw ArgumentError('Invalid platform');
+              }
+              final c = readiness.config;
+              final from = platform == 'ios' ? 'android' : 'ios';
+              final locale =
+                  storeLocale(platform, c?.changelogs.sourceLocale ?? 'en');
+              final source =
+                  storeLocale(from, c?.changelogs.sourceLocale ?? 'en');
+              if (locale == null || source == null) {
+                throw ArgumentError('Unsupported source locale');
+              }
+              final original = content.read(from, source);
+              final target = content.read(platform, locale);
+              final mapping = platform == 'ios'
+                  ? {
+                      'title': 'name',
+                      'full_description': 'description',
+                      'release_notes': 'release_notes'
+                    }
+                  : {
+                      'name': 'title',
+                      'description': 'full_description',
+                      'release_notes': 'release_notes'
+                    };
+              final merged = {...target};
+              for (final entry in mapping.entries) {
+                final value = original[entry.key] ?? '';
+                if (value.trim().isNotEmpty &&
+                    (target[entry.value] ?? '').trim().isEmpty) {
+                  if (storeFieldLength(platform, entry.value, value) >
+                      storeFields[platform]![entry.value]!) {
+                    throw ArgumentError(
+                        '${entry.value}: source text exceeds target store limit. Shorten it manually.');
+                  }
+                  merged[entry.value] = value;
+                }
+              }
+              if (merged.length == target.length &&
+                  merged.entries.every((e) => target[e.key] == e.value)) {
+                throw StateError('No missing common fields to copy.');
+              }
+              content.write(platform, locale, merged);
+              result = {'ok': true};
+            case '/api/sync':
+              if (readiness.config == null) {
+                throw StateError('Önce proje ayarlarını kaydedin.');
+              }
+              Credentials(project).sync();
+              result = {'ok': true};
             case '/api/translation-task':
               result = {
                 'prompt': StoreTranslationTask(content).build(
@@ -340,16 +397,26 @@ class StudioServer {
       }
       editor.update(['android', 'package_name'], android.packageName);
       editor.update(['changelogs', 'source_locale'], source);
-      file.copySync('${file.path}.bak');
-      file.writeAsStringSync(editor.toString());
+      if (editor.toString() != file.readAsStringSync()) {
+        file.copySync('${file.path}.bak');
+        file.writeAsStringSync(editor.toString());
+      }
       Credentials(project).sync();
     }
     content.initialize(['ios', 'android'], [source]);
   }
 
   void _startJob(Map<String, dynamic> data) {
-    if (!['push', 'pull', 'verify', 'translate', 'deploy', 'tools', 'export']
-        .contains(data['action'])) {
+    if (![
+      'push',
+      'pull',
+      'verify',
+      'translate',
+      'deploy',
+      'tools',
+      'check-tools',
+      'export'
+    ].contains(data['action'])) {
       throw ArgumentError('Unknown job');
     }
     final platforms =
@@ -377,8 +444,22 @@ class StudioServer {
                 versionCode: _optional(data['versionCode']));
             log('Exported Fastlane files: ${target.path}');
             code = 0;
+          case 'check-tools':
+            code = await _checkTools(platforms, log);
           case 'verify':
-            code = await service.verify(platforms);
+            var failed = false;
+            for (final platform in platforms) {
+              _verified.remove(platform);
+              final identity = readiness.verificationIdentity(platform);
+              final result = await service.verify([platform]);
+              if (result == 0 &&
+                  identity == readiness.verificationIdentity(platform)) {
+                _verified[platform] = identity;
+              } else {
+                failed = true;
+              }
+            }
+            code = failed ? 1 : 0;
           case 'push':
             code = await service.push(platforms,
                 scope: data['scope'] as String? ?? 'all',
@@ -435,7 +516,13 @@ class StudioServer {
           case 'deploy':
           case 'tools':
             final args = action == 'tools'
-                ? ['doctor', '--fix', '--platform', platforms.join(',')]
+                ? [
+                    'doctor',
+                    '--fix',
+                    '--tools-only',
+                    '--platform',
+                    platforms.join(',')
+                  ]
                 : [
                     'deploy',
                     '--platform',
@@ -470,6 +557,7 @@ class StudioServer {
                 .forEach(log);
             code = await proc.exitCode;
             await Future.wait([out, err]);
+            if (action == 'tools') code = await _checkTools(platforms, log);
         }
       } catch (e) {
         log(e.toString());
@@ -479,6 +567,44 @@ class StudioServer {
         log(code == 0 ? 'Completed.' : 'Failed. Review the log and retry.');
       }
     }());
+  }
+
+  Future<int> _checkTools(
+      List<String> platforms, void Function(String) log) async {
+    final env = const Toolchain().augmentedEnvironment(
+        {'FASTLANE_SKIP_UPDATE_CHECK': '1', 'CI': 'true'});
+    final commands = <String, List<String>>{
+      'flutter': ['--version'],
+      'ruby': ['--version'],
+      'fastlane': ['--version'],
+      if (platforms.contains('ios') && Platform.isMacOS) 'pod': ['--version'],
+      if (platforms.contains('ios') && Platform.isMacOS)
+        'xcodebuild': ['-version'],
+    };
+    var failed = platforms.contains('ios') && !Platform.isMacOS;
+    if (platforms.contains('ios') && !Platform.isMacOS) {
+      _tools['xcodebuild'] = {
+        'ok': false,
+        'message': 'iOS build için macOS gerekir.'
+      };
+    }
+    await Future.wait(commands.entries.map((entry) async {
+      Process? process;
+      var ok = false;
+      try {
+        process = await Process.start(entry.key, entry.value, environment: env);
+        final out = process.stdout.drain<void>();
+        final err = process.stderr.drain<void>();
+        ok = await process.exitCode.timeout(const Duration(seconds: 30)) == 0;
+        await Future.wait([out, err]);
+      } catch (_) {
+        process?.kill();
+      }
+      _tools[entry.key] = {'ok': ok};
+      failed |= !ok;
+      log('${entry.key}: ${ok ? 'hazır' : 'bulunamadı veya çalışmıyor'}');
+    }));
+    return failed ? 1 : 0;
   }
 
   String? _optional(dynamic value) =>

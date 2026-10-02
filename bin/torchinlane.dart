@@ -16,8 +16,13 @@ import 'package:torchinlane/src/commands/screenshots_command.dart';
 import 'package:torchinlane/src/commands/uninstall_command.dart';
 import 'package:torchinlane/src/commands/update_command.dart';
 import 'package:torchinlane/src/shell/version_check.dart';
+import 'package:torchinlane/src/version.dart';
 
 Future<void> main(List<String> arguments) async {
+  if (arguments.length == 1 && ['--version', '-v'].contains(arguments.first)) {
+    stdout.writeln('torchinlane $packageVersion');
+    return;
+  }
   await const VersionCheck().run();
 
   final runner = CommandRunner<int>(

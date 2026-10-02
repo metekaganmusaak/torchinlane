@@ -2,7 +2,7 @@ name: torchinlane
 description: >-
   Flutter release CLI and local GUI for builds, localized store texts/images,
   release notes, credentials, signing, and GitHub Actions automation.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/metekaganmusaak/torchinlane
 topics:
   - flutter
@@ -32,5 +32,5 @@ dev_dependencies:
 screenshots:
   - description: "Torchinlane Package Logo"
     path: assets/logo.png
-  - description: "Torchinlane Studio localized store editor"
+  - description: "Torchinlane Studio guided setup and readiness checklist"
     path: doc/studio.png

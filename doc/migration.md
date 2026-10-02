@@ -64,3 +64,13 @@ Anthropic. `store prompt` is an explicit alias. Scripts that need the former
 direct API behavior must add `--api`. Studio task generation works without
 `ANTHROPIC_API_KEY`; only its optional API button requires that key. Legacy
 `changelog translate` retains its API behavior.
+
+## Studio improvements in 0.2.1
+
+Upgrade with `dart pub global activate torchinlane 0.2.1`, then reopen Studio.
+Existing store files and credential paths need no conversion. The panel opens a
+readiness checklist, recognizes completed steps and remembers the selected stores.
+Successful live access checks last for the server session; restarting Studio asks
+for a new check, but never requires importing a still-valid key again. The default
+standalone upload is metadata only; select release notes/all explicitly when
+needed. Advanced options remain available under details.
