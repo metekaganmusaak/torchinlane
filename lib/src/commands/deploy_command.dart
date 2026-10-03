@@ -5,6 +5,7 @@ import '../store/service.dart';
 import '../store/content.dart';
 
 import '../config/torchinlane_config.dart';
+import '../scaffold/templates.dart';
 import '../project/flutter_project.dart';
 import '../shell/logger.dart';
 import '../shell/process_runner.dart';
@@ -162,6 +163,7 @@ class DeployCommand extends Command<int> {
               ['--obfuscate', '--split-debug-info=${config.splitDebugInfo}']);
         }
         iosSteps.add(_Step('flutter', args, cwd: root));
+        iosSteps.add(_Step('bash', ['-ec', fillMissingDsymsScript], cwd: root));
       }
       final lane = target == 'production' ? 'release' : 'beta';
       iosSteps.add(_Step('fastlane', [lane], cwd: '$root/ios', env: env));

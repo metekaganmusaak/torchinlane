@@ -2,7 +2,7 @@ name: torchinlane
 description: >-
   Flutter release CLI and local GUI for builds, localized store texts/images,
   release notes, credentials, signing, and GitHub Actions automation.
-version: 0.2.3
+version: 0.2.4
 repository: https://github.com/metekaganmusaak/torchinlane
 topics:
   - flutter

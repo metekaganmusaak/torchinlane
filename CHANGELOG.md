@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.4
+
+- Fix App Store Connect "Upload Symbols Failed" warnings. Prebuilt frameworks
+  such as `objective_c.framework` (Flutter native assets) ship without a dSYM.
+  After `flutter build ipa`, missing dSYMs are now generated with `dsymutil`
+  and the IPA is re-exported so they are bundled. Applies to
+  `torchinlane deploy` and the generated `scripts/build.sh`.
+- Existing apps must run `torchinlane update -y` to regenerate `scripts/build.sh`.
+
 ## 0.2.3
 
 - Fix store access checks and other Fastlane commands failing with
