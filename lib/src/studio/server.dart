@@ -18,10 +18,19 @@ import '../store/translation_task.dart';
 import 'ui.dart';
 
 class StudioServer {
-  StudioServer(this.project)
-      : token = base64Url
+  StudioServer(this.project, {File? preferencesFile})
+      : preferencesFile = preferencesFile ??
+            File(Platform.environment['TORCHINLANE_STUDIO_PREFERENCES'] ??
+                p.join(
+                    Platform.environment['HOME'] ??
+                        Platform.environment['USERPROFILE'] ??
+                        project.root.path,
+                    '.torchinlane',
+                    'studio-preferences.json')),
+        token = base64Url
             .encode(List.generate(32, (_) => Random.secure().nextInt(256)));
   final FlutterProject project;
+  final File preferencesFile;
   final String token;
   HttpServer? _server;
   bool _writing = false;
@@ -116,6 +125,7 @@ class StudioServer {
         final config = readiness.config;
         result = {
           'configured': config != null,
+          'uiLanguage': _savedLanguage(),
           'projectPath': project.root.path,
           'readiness': readiness.snapshot(verified: _verified, tools: _tools),
           'appName': config?.appName ?? project.readAppName(),
@@ -160,6 +170,24 @@ class StudioServer {
         };
       } else if (request.method == 'GET' && request.uri.path == '/api/job') {
         result = job;
+      } else if (request.method == 'POST' &&
+          request.uri.path == '/api/preferences') {
+        final data = await _body(request);
+        final language = data['language'];
+        if (!['tr', 'en'].contains(language)) {
+          throw ArgumentError('Unsupported interface language');
+        }
+        final existed = preferencesFile.parent.existsSync();
+        preferencesFile.parent.createSync(recursive: true);
+        preferencesFile
+            .writeAsStringSync('${jsonEncode({'language': language})}\n');
+        if (!Platform.isWindows) {
+          Process.runSync('chmod', ['600', preferencesFile.path]);
+          if (!existed) {
+            Process.runSync('chmod', ['700', preferencesFile.parent.path]);
+          }
+        }
+        result = {'ok': true};
       } else if (request.method == 'POST' &&
           request.uri.path.startsWith('/api/')) {
         if (busy) {
@@ -567,6 +595,17 @@ class StudioServer {
         log(code == 0 ? 'Completed.' : 'Failed. Review the log and retry.');
       }
     }());
+  }
+
+  String? _savedLanguage() {
+    try {
+      final data = jsonDecode(preferencesFile.readAsStringSync());
+      return data is Map && ['tr', 'en'].contains(data['language'])
+          ? data['language'] as String
+          : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<int> _checkTools(

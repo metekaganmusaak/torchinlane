@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.2
+
+- Add a Turkish/English interface language selector to Studio. Navigation,
+  setup help, field labels, readiness messages, counters and locale/asset names
+  update immediately without reloading the workspace.
+- Remember the language across page reloads and Studio restarts. Prefer the
+  current browser's saved choice, then the saved user preference, then browser
+  language (Turkish for `tr`, English otherwise).
+- Preserve unsaved project settings, store text, selected locales, imported
+  files and generated agent tasks when switching interface language. Store
+  metadata, coding-agent task text and native process diagnostics are unchanged.
+- Allow saving the UI preference while a job runs; workspace edits remain locked.
+- Add localization coverage and preference persistence tests, and verify both
+  interfaces and live switching in Chrome on desktop/mobile.
+
+
 ## 0.2.1
 
 - Replace Studio's crowded screens with a Turkish step-by-step workflow:

@@ -6,7 +6,12 @@ Flutter projenizin klasöründe çalıştırın:
 torchinlane studio
 ```
 
-Tarayıcı açılır. Terminali açık bırakın; Ctrl+C paneli kapatır.
+Tarayıcı açılır. Sağ üstteki **Arayüz dili** seçeneğinden **Türkçe** veya
+**English** seçebilirsiniz. Seçiminiz sonraki açılışlarda hatırlanır. Bu seçim
+yalnızca panel dilini değiştirir; uygulama metinlerini, mağaza dillerini veya
+kaydetmediğiniz değişiklikleri değiştirmez.
+
+Terminali açık bırakın; Ctrl+C paneli kapatır.
 `torchinlane init` komutunu önceden çalıştırmanız gerekmez. Mevcut kurulumunuz
 varsa panel onu tanır. CLI sürümünü `torchinlane --version` ile görebilirsiniz.
 

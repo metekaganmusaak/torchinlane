@@ -217,3 +217,18 @@ tekrar yazılmaz. Tarayıcı yenilemesinde oturum kaybı düzeltildi.
 Türkçe kaynak metin, ajan görevi/kopyalama/yeniden yükleme, tamamlanan çeviriyi
 atlama, görsel ekleme, sürüm numarası istemeyen metadata planı, mevcut kimliği
 atlama ve sayfa yenileme akışı masaüstü/mobil boyutlarda doğrulandı.
+
+## 0.2.2 — Türkçe/İngilizce panel
+
+Studio başlığına arayüz dili seçimi eklendi. Menüler, yardım metinleri, alan
+adları, dil/görsel adları, sayaçlar ve durum kartları anında güncellenir. İlk
+açılışta tarayıcı diline göre Türkçe veya İngilizce seçilir; kullanıcının seçimi
+tarayıcıda ve bilgisayardaki `~/.torchinlane/studio-preferences.json` dosyasında
+hatırlanır. Kaydetme yalnızca doğrulanmış loopback oturumundan yapılır; geçersiz
+diller reddedilir. UI tercihi kaydı devam eden işlerden bağımsızdır.
+
+Dili değiştirmek mağaza metinlerini, kaynak/hedef dil kodlarını, kaydedilmemiş
+form değerlerini veya hazırlanmış ajan görevini değiştirmez. Teknik araç
+çıktıları özgün dilinde kalır. Çeviri kataloğu pakete gömülüdür; API veya ağdan
+çeviri servisi gerekmez. 59 test geçti; iki dil, bütün ekranlar, sayfa yenileme,
+yeni tarayıcı oturumu ve kaydedilmemiş değerleri koruma Chrome'da doğrulandı.

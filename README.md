@@ -53,30 +53,36 @@ open; Ctrl+C stops it. `--no-open` prints the URL, and `--port 8787` selects a
 port. Copy the complete URL, including its session fragment, when opening a
 second browser tab.
 
-Studio now opens a **readiness overview** in Turkish. Select App Store, Google
+Studio opens a **readiness overview** in Turkish or English. Use the header
+**Arayüz dili / Interface language** selector to switch instantly. The choice
+is remembered across restarts; first-time selection follows your browser
+language. Switching the interface does not translate your store text, change
+source/target locales, or discard unsaved edits. Native tool logs keep their
+original language. Select App Store, Google
 Play, or both. It detects existing files and tells you which steps are complete,
 which checks have not run, and what can be skipped. No setup is repeated merely
 because you opened the panel.
 
-1. **Kurulum (setup):** existing values are loaded. Save only changed/missing
+1. **Setup / Kurulum:** existing values are loaded. Save only changed/missing
    settings. Valid credential files are recognized; import controls collapse
    when a file is present. Live access is a separate check, remembered for this
    server session and invalidated when credentials/app identity change.
-2. **Metinler (texts):** open the configured source language and write app texts
+2. **Texts / Metinler:** open the configured source language and write app texts
    and release notes. Common fields can be copied from the other store into
    empty fields. Existing texts can be left alone. Advanced fields are collapsed.
-3. **Çeviri (translation):** add target languages, click **Çeviri görevini hazırla**,
+3. **Translation / Çeviri:** add target languages, click **Çeviri görevini hazırla**,
    then **Görevi kopyala**. Paste into Claude Code/Codex working in the Flutter
    project. When finished, click **Sonuçları yükle ve kontrol et**. Counts show
    missing fields; completed translations can be skipped. No translation API key
    is required. Paid API and overwrite options remain under advanced details.
-4. **Görseller (images):** add files per language/device, only if replacing or
+4. **Images / Görseller:** add files per language/device, only if replacing or
    adding images. Existing remote images do not need to be re-imported.
-5. **Gönder (upload):** the default is app metadata only. Check the upload plan,
+5. **Upload / Gönder:** the default is app metadata only. Check the upload plan,
    then send content. Google version/track fields appear when notes are selected.
    Building/uploading a new app binary is a separate collapsed section.
 
-Read the [Turkish step-by-step quick start](doc/quick-start.tr.md). You can prepare
+Read the [English quick start](doc/quick-start.md) or
+[Turkish step-by-step quick start](doc/quick-start.tr.md). You can prepare
 content without store credentials, Ruby/Fastlane, or native signing. Before
 upload, check account access and tools in Setup. Imzalama (signing) matters for
 new app builds, not metadata-only upload. Tool checks do not install anything;

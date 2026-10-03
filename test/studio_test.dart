@@ -12,7 +12,9 @@ void main() {
   late HttpClient client;
   setUp(() async {
     project = createTestProject();
-    server = StudioServer(project);
+    server = StudioServer(project,
+        preferencesFile:
+            File('${project.root.path}/.torchinlane/test-preferences.json'));
     uri = await server.start();
     client = HttpClient();
   });
@@ -41,6 +43,28 @@ void main() {
     );
   }
 
+  test(
+      'interface preference persists across server restart without editing project settings',
+      () async {
+    final before = project.torchinlaneConfigFile.readAsStringSync();
+    expect(
+        (await request('/api/preferences', data: {'language': 'de'})).$1, 400);
+    server.job['running'] = true;
+    expect(
+        (await request('/api/preferences', data: {'language': 'en'})).$1, 200);
+    server.job['running'] = false;
+    expect((await request('/api/state')).$2['uiLanguage'], 'en');
+    await server.close();
+    server = StudioServer(project, preferencesFile: server.preferencesFile);
+    uri = await server.start();
+    expect((await request('/api/state')).$2['uiLanguage'], 'en');
+    expect(project.torchinlaneConfigFile.readAsStringSync(), before);
+    expect(
+        (await request('/api/preferences',
+                data: {'language': 'tr'}, origin: 'https://evil.example'))
+            .$1,
+        403);
+  });
   test(
       'local GUI loads but authenticated API rejects missing token and foreign origins',
       () async {
