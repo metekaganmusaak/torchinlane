@@ -8,6 +8,35 @@ void main() {
   late FlutterProject project;
   setUp(() => project = createTestProject());
   tearDown(() => project.root.deleteSync(recursive: true));
+  test('Appfiles load when evaluated without a filename like Fastlane',
+      () async {
+    for (final platform in ['ios', 'android']) {
+      final result = await Process.run('ruby', [
+        '-e',
+        r'''require 'json'
+values = {}
+receiver = Object.new
+[:app_identifier, :apple_id, :itc_team_id, :team_id, :json_key_file, :package_name].each do |name|
+  receiver.define_singleton_method(name) { |value| values[name] = value }
+end
+file = File.expand_path(ARGV[0])
+Dir.chdir(File.dirname(file)) { receiver.instance_eval(File.read(file)) }
+puts JSON.generate(values)
+''',
+        '${project.root.path}/$platform/fastlane/Appfile'
+      ], environment: {
+        'GOOGLE_APPLICATION_CREDENTIALS': ''
+      });
+      expect(result.exitCode, 0, reason: '$platform: ${result.stderr}');
+      final values = jsonDecode(result.stdout as String);
+      if (platform == 'ios') {
+        expect(values['app_identifier'], 'com.example.test');
+        expect(values['team_id'], 'TEAM123');
+      } else {
+        expect(values['package_name'], 'com.example.test');
+      }
+    }
+  }, skip: Platform.isWindows ? 'Requires Ruby' : false);
   test('generated Fastfiles/helpers and build wrapper have valid syntax',
       () async {
     for (final path in [

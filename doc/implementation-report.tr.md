@@ -232,3 +232,13 @@ form değerlerini veya hazırlanmış ajan görevini değiştirmez. Teknik araç
 çıktıları özgün dilinde kalır. Çeviri kataloğu pakete gömülüdür; API veya ağdan
 çeviri servisi gerekmez. 59 test geçti; iki dil, bütün ekranlar, sayfa yenileme,
 yeni tarayıcı oturumu ve kaydedilmemiş değerleri koruma Chrome'da doğrulandı.
+
+## 0.2.3 — Mağaza erişimi kontrolü düzeltmesi
+
+Fastlane Appfile dosyasını kaynak dosya adı vermeden `eval` ile okuduğu için
+`require_relative` çağrısı hata veriyordu. iOS ve Android Appfile şablonları,
+Fastlane’in Appfile klasöründeki çalışma dizininden mutlak yardımcı dosya yolu
+oluşturacak şekilde düzeltildi. Dosya adı olmayan değerlendirmeyi taklit eden
+regresyon testi eklendi; gerçek Fastlane 2.230.0 okuyucusunda iki platform da
+doğrulandı. Mevcut projelerde CLI güncellemesinden sonra `torchinlane update -y`
+çalıştırılıp Studio yeniden açılmalı; kimlik bilgilerini tekrar girmek gerekmez.

@@ -1,3 +1,12 @@
+# Upgrade to 0.2.3
+
+Run `dart pub global activate torchinlane 0.2.3`, close any running Studio,
+then run `torchinlane update -y` inside your Flutter project and reopen it with
+`torchinlane studio`. This regenerates both Appfiles to fix Fastlane’s
+`require_relative: cannot infer basepath` error. Changed generated files receive
+`.bak` backups; credentials and store content are reused. Studio’s generated-file
+repair button can also perform this update after restarting the upgraded CLI.
+
 # Upgrade from 0.1.x to 0.2.0
 
 1. Upgrade/install the CLI: `dart pub global activate torchinlane 0.2.0`.

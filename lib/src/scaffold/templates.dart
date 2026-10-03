@@ -3,7 +3,8 @@
 library;
 
 const iosAppfileTemplate = r'''
-require_relative '../../fastlane/StoreHelper'
+# Fastlane evaluates Appfile without a filename, inside its directory.
+require File.expand_path('../../fastlane/StoreHelper', Dir.pwd)
 ios = StoreHelper.config.fetch('ios')
 app_identifier(ios.fetch('bundle_id'))
 apple_id(ios['apple_id']) unless ios['apple_id'].to_s.empty?
@@ -12,7 +13,8 @@ team_id(ios.fetch('team_id'))
 ''';
 
 const androidAppfileTemplate = r'''
-require_relative '../../fastlane/StoreHelper'
+# Fastlane evaluates Appfile without a filename, inside its directory.
+require File.expand_path('../../fastlane/StoreHelper', Dir.pwd)
 android = StoreHelper.config.fetch('android')
 json_key_file(ENV['GOOGLE_APPLICATION_CREDENTIALS'] || StoreHelper.path(android.fetch('service_account_json')))
 package_name(android.fetch('package_name'))

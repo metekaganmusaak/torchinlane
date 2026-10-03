@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.3
+
+- Fix store access checks and other Fastlane commands failing with
+  `require_relative: cannot infer basepath`. Fastlane evaluates Appfiles without
+  a source filename; both generated Appfiles now load StoreHelper from the
+  Appfile working directory using an absolute path.
+- Add regression coverage for filename-less Appfile evaluation and verify both
+  platforms with the real Fastlane 2.230.0 Appfile reader.
+- Existing apps must run `torchinlane update -y` after upgrading the CLI, then
+  restart Studio. Credentials and store text do not need to be re-entered.
+
 ## 0.2.2
 
 - Add a Turkish/English interface language selector to Studio. Navigation,
