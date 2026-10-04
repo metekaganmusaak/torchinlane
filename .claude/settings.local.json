@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(dart pub *)",
+      "Bash(dart test *)",
+      "Bash(sed -n '480,560p' /opt/homebrew/Cellar/fastlane/2.230.0_1/libexec/gems/fastlane-2.230.0/supply/lib/supply/uploader.rb)",
+      "Read(//opt/homebrew/Cellar/fastlane/2.230.0_1/libexec/gems/fastlane-2.230.0/supply/lib/supply/**)",
+      "Bash(fastlane action *)",
+      "Bash(dart analyze *)",
+      "Bash(dart run *)",
+      "Bash(ruby -c /tmp/fastfile.rb)",
+      "Bash(ruby -c /tmp/helper.rb)",
+      "Bash(rm -rf tool /tmp/fastfile.rb /tmp/helper.rb)",
+      "Read(//Users/metekaganmusaak/Documents/GitHub/rana/android/fastlane/**)",
+      "Read(//Users/metekaganmusaak/Documents/GitHub/rana/fastlane/**)",
+      "Bash(ruby -c /Users/metekaganmusaak/Documents/GitHub/rana/android/fastlane/Fastfile)",
+      "Bash(ruby -c /Users/metekaganmusaak/Documents/GitHub/rana/fastlane/ChangelogHelper.rb)"
+    ],
+    "additionalDirectories": [
+      "/Users/metekaganmusaak/Documents/GitHub/rana/fastlane",
+      "/Users/metekaganmusaak/Documents/GitHub/rana/android/fastlane"
+    ]
+  }
+}
