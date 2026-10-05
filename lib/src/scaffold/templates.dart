@@ -360,13 +360,22 @@ handle_symbols() {
     cp -R "$DEBUG_INFO_DIR/." "$_archive/" 2>/dev/null
     printf "${GREEN}Symbols archived: $_archive ($_label)${NC}\n"
 
+    # crashlytics:symbols:upload only handles Android ELF files; iOS is symbolicated from dSYMs.
+    if [ "$_label" = "iOS" ]; then
+        printf "${GREEN}iOS symbolication uses dSYMs; Dart symbols archived only.${NC}\n"
+        return 0
+    fi
+
     if [ -n "$_app_id" ] && command -v firebase >/dev/null 2>&1; then
         printf "${YELLOW}Uploading $_label symbols to Crashlytics...${NC}\n"
-        if firebase crashlytics:symbols:upload --app="$_app_id" "$DEBUG_INFO_DIR"; then
+        _upload_dir=$(mktemp -d)
+        cp "$DEBUG_INFO_DIR"/app.android-*.symbols "$_upload_dir/" 2>/dev/null
+        if firebase crashlytics:symbols:upload --app="$_app_id" "$_upload_dir"; then
             printf "${GREEN}$_label symbols uploaded to Crashlytics.${NC}\n"
         else
             printf "${YELLOW}WARNING: $_label symbol upload failed; symbols kept in $_archive.${NC}\n"
         fi
+        rm -rf "$_upload_dir"
     else
         if [ -z "$_app_id" ]; then
             printf "${YELLOW}No Firebase App ID for $_label; symbols archived only.${NC}\n"

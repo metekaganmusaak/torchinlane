@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.6
+
+- Fix "Breakpad symbol generation failed" during iOS builds. `scripts/build.sh`
+  no longer sends Dart symbols to `crashlytics:symbols:upload` for iOS (iOS is
+  symbolicated from dSYMs; symbols are still archived). Android uploads only
+  `app.android-*.symbols`. Run `torchinlane update` in each app.
+
 ## 0.2.5
 
 - Fix lost Crashlytics symbols. `scripts/build.sh` archived split-debug-info
