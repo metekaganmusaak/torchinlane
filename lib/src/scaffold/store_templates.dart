@@ -241,9 +241,7 @@ module ChangelogHelper
     notes = {}
     locales = File.directory?(changelogs_dir) ? Dir.children(changelogs_dir).sort : []
     locales.each do |locale|
-      file = File.join(changelogs_dir, locale, 'release_notes.txt')
-      next unless File.file?(file)
-      text = File.read(file, encoding: 'UTF-8').strip
+      text = note_text(changelogs_dir, locale)
       next if text.empty?
       store_locale = REGISTRY.fetch(platform)[locale]
       unless store_locale
@@ -268,6 +266,28 @@ module ChangelogHelper
     notes
   end
 
+  def self.pubspec_version
+    file = StoreHelper.path('pubspec.yaml')
+    File.file?(file) ? File.read(file)[/^version:\s*(\S+)/, 1].to_s : ''
+  end
+
+  # <locale>/<pubspec version>.md: lines under the "## <version>" heading up to
+  # the next heading or "---" (whole file minus headings if there is none).
+  # Falls back to <locale>/release_notes.txt.
+  def self.note_text(changelogs_dir, locale)
+    version = pubspec_version
+    md = File.join(changelogs_dir, locale, "#{version}.md")
+    unless !version.empty? && File.file?(md)
+      txt = File.join(changelogs_dir, locale, 'release_notes.txt')
+      return File.file?(txt) ? File.read(txt, encoding: 'UTF-8').strip : ''
+    end
+    lines = File.read(md, encoding: 'UTF-8').lines.map(&:rstrip)
+    boundary = ->(l) { l.start_with?('#') || l.strip == '---' }
+    start = lines.index { |l| l.start_with?('#') && l.sub(/^#+\s*/, '').strip == version }
+    body = start ? lines[(start + 1)..].take_while { |l| !boundary.(l) } : lines.reject(&boundary)
+    body.join("\n").strip
+  end
+
   def self.google_play_release_notes(dir)
     read_notes(dir, 'android', 500).map { |locale, text| { language: locale, text: text } }
   end
@@ -288,9 +308,7 @@ module ChangelogHelper
     if ENV['TORCHINLANE_USE_STORE_NOTES'] == '1'
       return app_store_release_notes(dir)[REGISTRY.fetch('ios')[locale]].to_s
     end
-    file = File.join(dir, locale, 'release_notes.txt')
-    return '' unless File.file?(file)
-    text = File.read(file, encoding: 'UTF-8').strip
+    text = note_text(dir, locale)
     raise 'TestFlight notes exceed 4000 characters' if text.length > 4000
     text
   end

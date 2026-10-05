@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.7
+
+- Release notes are now read per version: `changelogs/<locale>/<pubspec version>.md`
+  (the lines under `## <version>`, up to the next heading or `---`).
+  `changelogs/<locale>/release_notes.txt` is still used when no such file exists.
+- `scripts/build.sh` no longer prompts for notes, no longer runs
+  `changelog clear` (which wiped every non-English locale) or auto-translates.
+  Run `torchinlane update` in each app.
+
 ## 0.2.6
 
 - Fix "Breakpad symbol generation failed" during iOS builds. `scripts/build.sh`

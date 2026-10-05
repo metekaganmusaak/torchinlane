@@ -433,41 +433,10 @@ if ask_yes_no "Upload builds to the stores?"; then
     printf "${GREEN}Target: $DEPLOY_TARGET${NC}\n"
 fi
 
-# 4. Release notes (English source only). Previous note is cleared first.
+# 4. Release notes come from $CHANGELOGS_DIR/<locale>/<pubspec version>.md
+#    (written before building; no prompt). Read by fastlane at upload time.
 SKIP_RELEASE_NOTES=1
-if [ "$SHOULD_UPLOAD" = true ]; then
-    echo ""
-    printf "${YELLOW}Release notes (source locale: $SOURCE_LOCALE).${NC}\n"
-    echo "Enter your notes. An empty note is fine. End with an empty line:"
-    NOTE=""
-    NL="$(printf '\n_')"; NL="${NL%_}"  # newline that survives command substitution
-    while IFS= read -r line; do
-        [ -z "$line" ] && break
-        NOTE="${NOTE}${line}${NL}"
-    done
-
-    SOURCE_NOTE_FILE="$CHANGELOGS_DIR/$SOURCE_LOCALE/release_notes.txt"
-    # Reset previous notes before collecting this release; retained after upload.
-    if command -v torchinlane >/dev/null 2>&1; then
-        torchinlane changelog clear >/dev/null 2>&1
-    fi
-    mkdir -p "$CHANGELOGS_DIR/$SOURCE_LOCALE"
-    printf '%s' "$NOTE" > "$SOURCE_NOTE_FILE"
-
-    if [ -n "$(printf '%s' "$NOTE" | tr -d '[:space:]')" ]; then
-        SKIP_RELEASE_NOTES=0
-        # Translate to other locales when an API key is available.
-        if [ -n "$ANTHROPIC_API_KEY" ] && command -v torchinlane >/dev/null 2>&1; then
-            printf "${YELLOW}Translating release notes to other locales...${NC}\n"
-            torchinlane changelog translate --overwrite || \
-                printf "${YELLOW}WARNING: translation failed; shipping $SOURCE_LOCALE note only.${NC}\n"
-        else
-            printf "${YELLOW}No ANTHROPIC_API_KEY set; shipping $SOURCE_LOCALE note only.${NC}\n"
-        fi
-    else
-        printf "${YELLOW}Empty release note; stores keep their current note.${NC}\n"
-    fi
-fi
+[ "$SHOULD_UPLOAD" = true ] && SKIP_RELEASE_NOTES=0
 export FASTLANE_SKIP_RELEASE_NOTES=$SKIP_RELEASE_NOTES
 
 # 5. Version bump (build mode only; only-upload ships the existing binary).
@@ -511,6 +480,15 @@ if [ "$ONLY_UPLOAD" = false ]; then
         fi
     else
         printf "${YELLOW}Version unchanged.${NC}\n"
+    fi
+fi
+
+if [ "$SHOULD_UPLOAD" = true ]; then
+    NOTES_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version://' | tr -d '[:space:]')
+    if [ -f "$CHANGELOGS_DIR/$SOURCE_LOCALE/$NOTES_VERSION.md" ]; then
+        printf "${GREEN}Release notes: $CHANGELOGS_DIR/<locale>/$NOTES_VERSION.md${NC}\n"
+    else
+        printf "${YELLOW}No $CHANGELOGS_DIR/$SOURCE_LOCALE/$NOTES_VERSION.md; stores keep their current note.${NC}\n"
     fi
 fi
 
