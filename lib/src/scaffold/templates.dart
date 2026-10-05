@@ -493,7 +493,7 @@ if [ "$SHOULD_UPLOAD" = true ]; then
     done
     for dir in "$CHANGELOGS_DIR"/*/; do
         f="${dir}$NOTES_VERSION.txt"
-        [ -f "$f" ] || printf '## %s\n\n' "$NOTES_VERSION" > "$f"
+        [ -f "$f" ] || : > "$f"
     done
     echo ""
     printf "${YELLOW}Release notes files ready: $CHANGELOGS_DIR/<locale>/$NOTES_VERSION.txt${NC}\n"

@@ -99,7 +99,7 @@ puts JSON.generate(values)
     File('${dir.path}/en/2.0.2+24.txt')
       ..createSync(recursive: true)
       ..writeAsStringSync(
-          '# Release Notes\n\n## 2.0.2+24\n\n- New\n- Fix\n\n---\n\n## 2.0.1+23\n\n- Old\n');
+          '- New\n- Fix\n');
     File('${dir.path}/tr/2.0.2+24.txt')
       ..createSync(recursive: true)
       ..writeAsStringSync('- Yeni\n');

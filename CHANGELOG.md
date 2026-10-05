@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.10
+
+- Release notes file `<locale>/<version>.txt` is used whole; no `## <version>` heading. build.sh creates empty files.
+- Fixed `torchinlane --version` reporting an old version.
+
 ## 0.2.9
 
 - Added changelog folders creation command.
