@@ -486,7 +486,11 @@ fi
 # Create empty <locale>/<version>.txt notes for every locale, then wait for the user to fill them.
 if [ "$SHOULD_UPLOAD" = true ]; then
     NOTES_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version://' | tr -d '[:space:]')
-    mkdir -p "$CHANGELOGS_DIR/$SOURCE_LOCALE"
+    # Locales from torchinlane.yaml (changelogs.locales), so deleted folders come back.
+    NOTE_LOCALES=$(ruby -ryaml -e 'puts Array((YAML.load_file("torchinlane.yaml") || {}).dig("changelogs", "locales")).map { |l| l == false ? "no" : l }' 2>/dev/null)
+    for locale in $SOURCE_LOCALE $NOTE_LOCALES; do
+        mkdir -p "$CHANGELOGS_DIR/$locale"
+    done
     for dir in "$CHANGELOGS_DIR"/*/; do
         f="${dir}$NOTES_VERSION.txt"
         [ -f "$f" ] || printf '## %s\n\n' "$NOTES_VERSION" > "$f"

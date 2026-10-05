@@ -6,7 +6,9 @@
   - `scripts/build.sh` creates `## <version>` notes files for the version being
     shipped in every `changelogs/<locale>/` folder, then waits until you type `ok`
     (fill all languages first; empty ones ship without notes).
-    Run `torchinlane update` in each app.
+    Locale folders listed in `torchinlane.yaml` (`changelogs.locales`) are
+  recreated if missing.
+  Run `torchinlane update` in each app.
 
 ## 0.2.7
 
