@@ -1,14 +1,18 @@
 # Changelog
 
+## 0.2.9
+
 ## 0.2.8
+
+- Added changelog folders creation command.
 
 - Versioned release notes are `.txt`: `changelogs/<locale>/<pubspec version>.txt`.
   - `scripts/build.sh` creates `## <version>` notes files for the version being
     shipped in every `changelogs/<locale>/` folder, then waits until you type `ok`
     (fill all languages first; empty ones ship without notes).
     Locale folders listed in `torchinlane.yaml` (`changelogs.locales`) are
-  recreated if missing.
-  Run `torchinlane update` in each app.
+    recreated if missing.
+    Run `torchinlane update` in each app.
 
 ## 0.2.7
 
