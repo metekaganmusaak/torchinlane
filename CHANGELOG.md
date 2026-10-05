@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.5
+
+- Fix lost Crashlytics symbols. `scripts/build.sh` archived split-debug-info
+  symbols under `build/debug-info-archive/`, which the next build's
+  `flutter clean` deleted. They are now kept in `debug-info-archive/<version>/`
+  at the project root (git-ignored). Run `torchinlane update` in each app.
+
 ## 0.2.4
 
 - Fix App Store Connect "Upload Symbols Failed" warnings. Prebuilt frameworks

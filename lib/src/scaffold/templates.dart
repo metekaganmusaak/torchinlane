@@ -343,7 +343,7 @@ ANDROID_FIREBASE_APP_ID="${ANDROID_FIREBASE_APP_ID:-{{android_firebase_app_id}}}
 
 printf "${YELLOW}--- {{app_name}} Build Script ---${NC}\n"
 
-# Archive Flutter split-debug-info symbols per version (build/ gets wiped by
+# Archive Flutter split-debug-info symbols per version outside build/ (wiped by
 # `flutter clean`, so keep a copy), then upload to Crashlytics if configured.
 # Args: <platform-label> <firebase-app-id>
 handle_symbols() {
@@ -355,7 +355,7 @@ handle_symbols() {
         return 0
     fi
 
-    _archive="build/debug-info-archive/$VERSION"
+    _archive="debug-info-archive/$VERSION"
     mkdir -p "$_archive"
     cp -R "$DEBUG_INFO_DIR/." "$_archive/" 2>/dev/null
     printf "${GREEN}Symbols archived: $_archive ($_label)${NC}\n"

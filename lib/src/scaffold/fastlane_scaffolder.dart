@@ -163,7 +163,7 @@ class FastlaneScaffolder {
       'store/.snapshots/',
       '.torchinlane/',
       'gha-creds-*.json',
-      'build/debug-info-archive/',
+      'debug-info-archive/',
     ];
 
     final existing = gitignore.existsSync() ? gitignore.readAsStringSync() : '';
