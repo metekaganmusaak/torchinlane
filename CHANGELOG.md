@@ -2,9 +2,9 @@
 
 ## 0.2.9
 
-## 0.2.8
-
 - Added changelog folders creation command.
+
+## 0.2.8
 
 - Versioned release notes are `.txt`: `changelogs/<locale>/<pubspec version>.txt`.
   - `scripts/build.sh` creates `## <version>` notes files for the version being
