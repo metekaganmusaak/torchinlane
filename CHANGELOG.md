@@ -3,7 +3,10 @@
 ## 0.2.8
 
 - Versioned release notes are `.txt`: `changelogs/<locale>/<pubspec version>.txt`.
-  Run `torchinlane update` in each app.
+  - `scripts/build.sh` creates `## <version>` notes files for the version being
+    shipped in every `changelogs/<locale>/` folder, then waits until you type `ok`
+    (fill all languages first; empty ones ship without notes).
+    Run `torchinlane update` in each app.
 
 ## 0.2.7
 
@@ -62,7 +65,6 @@
 - Allow saving the UI preference while a job runs; workspace edits remain locked.
 - Add localization coverage and preference persistence tests, and verify both
   interfaces and live switching in Chrome on desktop/mobile.
-
 
 ## 0.2.1
 
@@ -152,7 +154,7 @@
 ## 0.1.12
 
 - Fix `CocoaPods not installed or not in valid state` aborting an iOS deploy. The old check was a bare `which pod`, which succeeds whenever the binary merely exists — so a CocoaPods install broken by a system Ruby or Xcode upgrade was reported as ✓ by `doctor` and only blew up later, at `pod install`, after a full build had already run. Tool detection now distinguishes four states instead of found/not-found: `ok`, `broken` (resolves but won't execute), `installedNotOnPath` (gem present in a gem bin dir the shell never exported), and `missing` — and applies the matching repair for each.
-- Install and repair the Ruby toolchain automatically. `torchinlane init` now sets up fastlane and CocoaPods at their latest published versions *before* asking for your bundle IDs, so a broken toolchain surfaces immediately instead of after ten config prompts (`--skip-tools` opts out; failures only warn, since scaffolding on a non-building machine is valid). Installation uses `gem install --no-document`, falls back to `--user-install` when the active gem dir isn't writable (macOS system Ruby) rather than escalating to sudo, and runs `pod setup` after installing CocoaPods so the first `pod install` doesn't fail on a missing spec repo.
+- Install and repair the Ruby toolchain automatically. `torchinlane init` now sets up fastlane and CocoaPods at their latest published versions _before_ asking for your bundle IDs, so a broken toolchain surfaces immediately instead of after ten config prompts (`--skip-tools` opts out; failures only warn, since scaffolding on a non-building machine is valid). Installation uses `gem install --no-document`, falls back to `--user-install` when the active gem dir isn't writable (macOS system Ruby) rather than escalating to sudo, and runs `pod setup` after installing CocoaPods so the first `pod install` doesn't fail on a missing spec repo.
 - Fix `doctor` reporting fastlane as missing when it is installed but not on `PATH`. Instead of just naming the problem, `torchinlane doctor --fix` now installs what's missing, reinstalls what's broken, and appends the gem bin directory to your shell profile (`~/.zshrc`, `~/.bashrc`, or `~/.bash_profile`, written once and marked). Note that a profile export cannot affect the already-running shell, so `doctor` tells you to reload it.
 - Preflight tools before `torchinlane deploy`. fastlane (and CocoaPods, for iOS) are verified and repaired up front, so a missing gem no longer wastes a full `flutter build ipa` before failing. Deploy steps also run with the gem bin directories prepended to `PATH`, so a gem installed moments earlier in the same run resolves without reloading your shell first.
 - `doctor` now prints real versions (`✓ fastlane 2.230.0`, `✓ pod 1.16.2`) rather than a bare "on PATH", and treats CocoaPods as required only on macOS.

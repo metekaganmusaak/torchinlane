@@ -483,13 +483,21 @@ if [ "$ONLY_UPLOAD" = false ]; then
     fi
 fi
 
+# Create empty <locale>/<version>.txt notes for every locale, then wait for the user to fill them.
 if [ "$SHOULD_UPLOAD" = true ]; then
     NOTES_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version://' | tr -d '[:space:]')
-    if [ -f "$CHANGELOGS_DIR/$SOURCE_LOCALE/$NOTES_VERSION.txt" ]; then
-        printf "${GREEN}Release notes: $CHANGELOGS_DIR/<locale>/$NOTES_VERSION.txt${NC}\n"
-    else
-        printf "${YELLOW}No $CHANGELOGS_DIR/$SOURCE_LOCALE/$NOTES_VERSION.txt; stores keep their current note.${NC}\n"
-    fi
+    mkdir -p "$CHANGELOGS_DIR/$SOURCE_LOCALE"
+    for dir in "$CHANGELOGS_DIR"/*/; do
+        f="${dir}$NOTES_VERSION.txt"
+        [ -f "$f" ] || printf '## %s\n\n' "$NOTES_VERSION" > "$f"
+    done
+    echo ""
+    printf "${YELLOW}Release notes files ready: $CHANGELOGS_DIR/<locale>/$NOTES_VERSION.txt${NC}\n"
+    printf "${YELLOW}Please fill the release notes in ALL languages; empty languages ship without notes.${NC}\n"
+    while true; do
+        read -p "Type ok to continue: " notes_ok
+        [ "$notes_ok" = "ok" ] && break
+    done
 fi
 
 # 6. Deep clean.
