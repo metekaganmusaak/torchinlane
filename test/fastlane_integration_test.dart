@@ -88,7 +88,7 @@ puts JSON.generate(values)
     expect(long.exitCode, isNot(0));
     expect(long.stderr, contains('exceed 500'));
   }, skip: Platform.isWindows ? 'Requires Ruby' : false);
-  test('reads notes for the pubspec version from <locale>/<version>.md',
+  test('reads notes for the pubspec version from <locale>/<version>.txt',
       () async {
     final pubspec = File('${project.root.path}/pubspec.yaml');
     final original = pubspec.readAsStringSync();
@@ -96,11 +96,11 @@ puts JSON.generate(values)
         RegExp(r'^version:.*$', multiLine: true), 'version: 2.0.2+24'));
     addTearDown(() => pubspec.writeAsStringSync(original));
     final dir = Directory('${project.root.path}/versioned-notes')..createSync();
-    File('${dir.path}/en/2.0.2+24.md')
+    File('${dir.path}/en/2.0.2+24.txt')
       ..createSync(recursive: true)
       ..writeAsStringSync(
           '# Release Notes\n\n## 2.0.2+24\n\n- New\n- Fix\n\n---\n\n## 2.0.1+23\n\n- Old\n');
-    File('${dir.path}/tr/2.0.2+24.md')
+    File('${dir.path}/tr/2.0.2+24.txt')
       ..createSync(recursive: true)
       ..writeAsStringSync('- Yeni\n');
     File('${dir.path}/de/release_notes.txt')

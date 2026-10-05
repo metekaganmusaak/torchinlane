@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.8
+
+- Versioned release notes are `.txt`: `changelogs/<locale>/<pubspec version>.txt`.
+  Run `torchinlane update` in each app.
+
 ## 0.2.7
 
 - Release notes are now read per version: `changelogs/<locale>/<pubspec version>.md`

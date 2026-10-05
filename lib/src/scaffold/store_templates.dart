@@ -271,17 +271,17 @@ module ChangelogHelper
     File.file?(file) ? File.read(file)[/^version:\s*(\S+)/, 1].to_s : ''
   end
 
-  # <locale>/<pubspec version>.md: lines under the "## <version>" heading up to
+  # <locale>/<pubspec version>.txt: lines under the "## <version>" heading up to
   # the next heading or "---" (whole file minus headings if there is none).
   # Falls back to <locale>/release_notes.txt.
   def self.note_text(changelogs_dir, locale)
     version = pubspec_version
-    md = File.join(changelogs_dir, locale, "#{version}.md")
-    unless !version.empty? && File.file?(md)
+    file = File.join(changelogs_dir, locale, "#{version}.txt")
+    unless !version.empty? && File.file?(file)
       txt = File.join(changelogs_dir, locale, 'release_notes.txt')
       return File.file?(txt) ? File.read(txt, encoding: 'UTF-8').strip : ''
     end
-    lines = File.read(md, encoding: 'UTF-8').lines.map(&:rstrip)
+    lines = File.read(file, encoding: 'UTF-8').lines.map(&:rstrip)
     boundary = ->(l) { l.start_with?('#') || l.strip == '---' }
     start = lines.index { |l| l.start_with?('#') && l.sub(/^#+\s*/, '').strip == version }
     body = start ? lines[(start + 1)..].take_while { |l| !boundary.(l) } : lines.reject(&boundary)

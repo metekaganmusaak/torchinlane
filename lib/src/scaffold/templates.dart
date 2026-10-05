@@ -433,7 +433,7 @@ if ask_yes_no "Upload builds to the stores?"; then
     printf "${GREEN}Target: $DEPLOY_TARGET${NC}\n"
 fi
 
-# 4. Release notes come from $CHANGELOGS_DIR/<locale>/<pubspec version>.md
+# 4. Release notes come from $CHANGELOGS_DIR/<locale>/<pubspec version>.txt
 #    (written before building; no prompt). Read by fastlane at upload time.
 SKIP_RELEASE_NOTES=1
 [ "$SHOULD_UPLOAD" = true ] && SKIP_RELEASE_NOTES=0
@@ -485,10 +485,10 @@ fi
 
 if [ "$SHOULD_UPLOAD" = true ]; then
     NOTES_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version://' | tr -d '[:space:]')
-    if [ -f "$CHANGELOGS_DIR/$SOURCE_LOCALE/$NOTES_VERSION.md" ]; then
-        printf "${GREEN}Release notes: $CHANGELOGS_DIR/<locale>/$NOTES_VERSION.md${NC}\n"
+    if [ -f "$CHANGELOGS_DIR/$SOURCE_LOCALE/$NOTES_VERSION.txt" ]; then
+        printf "${GREEN}Release notes: $CHANGELOGS_DIR/<locale>/$NOTES_VERSION.txt${NC}\n"
     else
-        printf "${YELLOW}No $CHANGELOGS_DIR/$SOURCE_LOCALE/$NOTES_VERSION.md; stores keep their current note.${NC}\n"
+        printf "${YELLOW}No $CHANGELOGS_DIR/$SOURCE_LOCALE/$NOTES_VERSION.txt; stores keep their current note.${NC}\n"
     fi
 fi
 
