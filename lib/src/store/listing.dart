@@ -79,10 +79,14 @@ class StoreListing {
   }
 
   /// Writes native locale files for every language that has a listing file.
-  /// Existing fields not covered by the listing (release notes) are kept.
+  /// With [releaseNotes] (per language, see `listingReleaseNotes`) every locale
+  /// gets its language's notes and a language without notes loses stale ones;
+  /// without it existing release notes are kept.
   /// Nothing is written when any value breaks a store limit.
   Map<String, int> generate(List<String> platforms,
-      {String from = 'en', bool dryRun = false}) {
+      {String from = 'en',
+      bool dryRun = false,
+      Map<String, String>? releaseNotes}) {
     final source = read(from);
     final writes = <(String, String, Map<String, String>)>[];
     final errors = <String>[];
@@ -105,6 +109,15 @@ class StoreListing {
           }
           fields[e.value] = text;
         }
+        final notes = releaseNotes?[language] ?? '';
+        if (notes.isNotEmpty) {
+          final max = storeFields[platform]!['release_notes']!;
+          if (notes.runes.length > max) {
+            errors.add(
+                'changelogs/$language release notes ($platform): ${notes.runes.length}/$max');
+          }
+          fields['release_notes'] = notes;
+        }
         // URLs alone never create a locale: Apple needs text in each one.
         final hasText = listingTargets[platform]!.keys.any((k) =>
             !listingSharedFields.contains(k) &&
@@ -120,8 +133,11 @@ class StoreListing {
     for (final (platform, locale, fields) in writes) {
       counts[platform] = counts[platform]! + 1;
       if (dryRun) continue;
-      content.write(
-          platform, locale, {...content.read(platform, locale), ...fields});
+      final data = {...content.read(platform, locale), ...fields};
+      if (releaseNotes != null && !fields.containsKey('release_notes')) {
+        data.remove('release_notes');
+      }
+      content.write(platform, locale, data);
     }
     return counts;
   }

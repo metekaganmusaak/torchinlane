@@ -5,6 +5,7 @@ import '../config/torchinlane_config.dart';
 import '../project/flutter_project.dart';
 import '../store/content.dart';
 import '../store/listing.dart';
+import '../store/release_notes.dart';
 import '../store/service.dart';
 import '../store/translation.dart';
 import '../store/translation_task.dart';
@@ -122,18 +123,36 @@ class _StoreAction extends Command<int> {
           'Store files created in store/. Existing content preserved.');
       return 0;
     }
+    final changelogs = config == null
+        ? null
+        : Directory('${project.root.path}/${config.changelogs.dir}');
     if (action == 'generate') {
-      final counts = StoreListing(content).generate(platforms,
-          from: args['from'] as String, dryRun: args['dry-run'] as bool);
+      final listing = StoreListing(content);
+      final notes = changelogs == null
+          ? null
+          : listingReleaseNotes(changelogs, config!.changelogs.sourceLocale,
+              project.readVersion().toString(), listing.languages());
+      final counts = listing.generate(platforms,
+          from: args['from'] as String,
+          dryRun: args['dry-run'] as bool,
+          releaseNotes: notes);
       stdout.writeln(counts.entries
           .map((e) =>
               '${e.key}: ${e.value} locale files ${args['dry-run'] as bool ? 'valid (dry run)' : 'written'}')
           .join('\n'));
+      if (notes != null) {
+        stdout.writeln(
+            'Release notes ${project.readVersion()}: ${notes.length} languages from ${config!.changelogs.dir}/');
+      }
       return 0;
     }
     final scope = args['scope'] as String;
     if (action == 'validate') {
       final errors = content.validate(platforms, scope: scope);
+      if (changelogs != null && (scope == 'all' || scope == 'notes')) {
+        errors.addAll(releaseNoteErrors(
+            changelogs, project.readVersion().toString(), platforms));
+      }
       for (final e in errors) {
         stderr.writeln(e);
       }

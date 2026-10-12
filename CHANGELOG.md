@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+- `torchinlane store generate` also fills release notes: `changelogs/<language>/<version>.txt` goes to every
+  Apple and Google locale of that language (en → en-US, en-GB, en-AU…). A language without notes for the
+  version loses old store notes, so stale notes never ship. Without a source-language `<version>.txt`,
+  store notes are left as they are.
+- `deploy` (also `--dry-run`) and `store validate` check release notes before the build: two `changelogs/`
+  folders feeding one store locale (e.g. `pt` + `pt-BR`) or notes over the store limit stop it early,
+  instead of failing the upload after the build.
+
 ## 0.3.0
 
 - `store/listing/<language>.json`: one store text per language. `torchinlane store generate` fills every

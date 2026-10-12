@@ -1,8 +1,11 @@
+import 'dart:io';
+
 import 'package:args/command_runner.dart';
 
 import '../changelog/locale_maps.dart';
 import '../store/service.dart';
 import '../store/content.dart';
+import '../store/release_notes.dart';
 
 import '../config/torchinlane_config.dart';
 import '../scaffold/templates.dart';
@@ -83,6 +86,13 @@ class DeployCommand extends Command<int> {
     if (argResults!['with-store'] as bool) {
       final errors = StoreContent(project)
           .validate(platforms, scope: 'all', skipNotes: skipReleaseNotes);
+      if (errors.isNotEmpty) throw StateError(errors.join('\n'));
+    }
+    if (!skipReleaseNotes) {
+      final errors = releaseNoteErrors(
+          Directory('${project.root.path}/${config.changelogs.dir}'),
+          project.readVersion().toString(),
+          platforms);
       if (errors.isNotEmpty) throw StateError(errors.join('\n'));
     }
 

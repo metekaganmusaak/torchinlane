@@ -182,8 +182,12 @@ Google `full_description`; `subtitle`, `keywords`, `promotional_text` → Apple;
 `short_description` → Google. `support_url`, `marketing_url`, `privacy_url`,
 `video` come from the source language unless a language sets its own.
 `tagline` and `screenshots` (headlines) are for screenshot generators and are
-never uploaded. Release notes stay untouched. Nothing is written when any value
-breaks a store limit.
+never uploaded. Release notes: when `changelogs/<source>/<version>.txt` exists
+for the pubspec version, each locale gets `changelogs/<language>/<version>.txt`
+(a language without one loses old notes); otherwise release notes stay
+untouched. Changelog folders use these language codes (`pt-BR`, not `pt`):
+`deploy` and `store validate` stop when two folders feed one store locale.
+Nothing is written when any value breaks a store limit.
 
 Rendered screenshots in `store/screenshots/<language>/<kind>/` are used for
 every locale of that language that has no own `images/<locale>/<group>/`

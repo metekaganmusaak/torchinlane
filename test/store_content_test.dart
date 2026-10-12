@@ -4,6 +4,7 @@ import 'package:image/image.dart' as img;
 import 'package:torchinlane/src/project/flutter_project.dart';
 import 'package:torchinlane/src/store/content.dart';
 import 'package:torchinlane/src/store/listing.dart';
+import 'package:torchinlane/src/store/release_notes.dart';
 import 'package:torchinlane/src/store/service.dart';
 import 'test_project.dart';
 
@@ -166,6 +167,49 @@ void main() {
         .writeAsStringSync('{"name": "${'x' * 31}"}');
     expect(() => listing.generate(['ios']), throwsStateError);
     expect(content.locales('ios'), isNot(contains('de-DE')));
+  });
+  test('generate gives every locale its language notes and drops stale ones',
+      () {
+    final listing = StoreListing(content);
+    listing.directory.createSync(recursive: true);
+    for (final language in ['en', 'de']) {
+      File('${listing.directory.path}/$language.json')
+          .writeAsStringSync('{"name": "App", "description": "Notes."}');
+    }
+    final changelogs = Directory('${project.root.path}/changelogs');
+    File('${changelogs.path}/en/1.2.0+42.txt')
+      ..createSync(recursive: true)
+      ..writeAsStringSync('- New\n');
+    expect(listingReleaseNotes(changelogs, 'de', '1.2.0+42', ['en']), isNull);
+    content.write('ios', 'de-DE', {'release_notes': 'Old'});
+    final notes = listingReleaseNotes(
+        changelogs, 'en', '1.2.0+42', listing.languages())!;
+    expect(notes, {'en': '- New'});
+    listing.generate(['ios', 'android'], releaseNotes: notes);
+    expect(content.read('ios', 'en-GB')['release_notes'], '- New');
+    expect(content.read('android', 'en-IN')['release_notes'], '- New');
+    expect(content.read('ios', 'de-DE').containsKey('release_notes'), isFalse);
+    expect(
+        () => listing.generate(['android'], releaseNotes: {'en': 'x' * 501}),
+        throwsStateError);
+  });
+  test('release note check catches folders sharing a store locale', () {
+    final changelogs = Directory('${project.root.path}/notes');
+    void note(String folder, String file, String text) =>
+        File('${changelogs.path}/$folder/$file')
+          ..createSync(recursive: true)
+          ..writeAsStringSync(text);
+    note('pt-BR', '1.2.0+42.txt', '- Novo');
+    note('fil', '1.2.0+42.txt', '- Bago');
+    expect(releaseNoteErrors(changelogs, '1.2.0+42', ['ios', 'android']),
+        isEmpty);
+    note('pt', 'release_notes.txt', 'Antigo');
+    note('tl', 'release_notes.txt', 'x' * 501);
+    final errors =
+        releaseNoteErrors(changelogs, '1.2.0+42', ['ios', 'android']);
+    expect(errors, contains(contains('changelogs/pt and changelogs/pt-BR')));
+    expect(errors, contains(contains('changelogs/fil and changelogs/tl')));
+    expect(errors, contains('changelogs/tl: 501/500 characters for android'));
   });
   test('rendered screenshots serve every locale of their language', () {
     final rendered =
