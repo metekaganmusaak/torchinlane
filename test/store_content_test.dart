@@ -3,6 +3,7 @@ import 'package:test/test.dart';
 import 'package:image/image.dart' as img;
 import 'package:torchinlane/src/project/flutter_project.dart';
 import 'package:torchinlane/src/store/content.dart';
+import 'package:torchinlane/src/store/listing.dart';
 import 'package:torchinlane/src/store/service.dart';
 import 'test_project.dart';
 
@@ -137,5 +138,58 @@ void main() {
         service.push(['android'], dryRun: true), throwsArgumentError);
     expect(await service.push(['android'], dryRun: true, versionCode: '42'), 0);
     expect(logs.last, contains('no store request'));
+  });
+
+  test('listing fans one text per language out to every store locale', () {
+    final listing = StoreListing(content);
+    listing.directory.createSync(recursive: true);
+    File('${listing.directory.path}/en.json').writeAsStringSync(
+        '{"name": "App", "description": "Notes.", "keywords": "notes,lock", "privacy_url": "https://example.com/p", "screenshots": ["One"]}');
+    File('${listing.directory.path}/zh-Hant.json')
+        .writeAsStringSync('{"name": "應用", "description": "筆記。"}');
+    content.write('android', 'zh-TW', {'release_notes': 'Kept'});
+    final counts = listing.generate(['ios', 'android']);
+    expect(counts, {'ios': 5, 'android': 9});
+    expect(content.read('ios', 'en-GB')['keywords'], 'notes,lock');
+    expect(content.read('android', 'en-IN')['full_description'], 'Notes.');
+    expect(
+        content.read('ios', 'zh-Hant')['privacy_url'], 'https://example.com/p');
+    expect(content.read('android', 'zh-HK')['title'], '應用');
+    expect(content.read('android', 'zh-TW')['release_notes'], 'Kept');
+    expect(content.locales('ios'), isNot(contains('de-DE')));
+    File('${listing.directory.path}/fr.json')
+        .writeAsStringSync('{"screenshots": ["Un"]}');
+    listing.generate(['ios']);
+    expect(content.locales('ios'), isNot(contains('fr-FR')),
+        reason: 'shared URLs alone do not create a locale');
+    File('${listing.directory.path}/de.json')
+        .writeAsStringSync('{"name": "${'x' * 31}"}');
+    expect(() => listing.generate(['ios']), throwsStateError);
+    expect(content.locales('ios'), isNot(contains('de-DE')));
+  });
+  test('rendered screenshots serve every locale of their language', () {
+    final rendered =
+        Directory('${content.directory.path}/screenshots/es/iphone')
+          ..createSync(recursive: true);
+    File('${rendered.path}/01.jpg')
+        .writeAsBytesSync(img.encodeJpg(img.Image(width: 1320, height: 2868)));
+    File('${rendered.path}/.DS_Store').writeAsStringSync('');
+    expect(content.imageLocales('ios'), ['es-ES', 'es-MX']);
+    expect(content.imageFiles('ios', 'es-MX', 'iphone'), hasLength(1));
+    expect(content.validate(['ios'], scope: 'images'), isEmpty);
+    final own = content.images('ios', 'es-ES', 'iphone')
+      ..createSync(recursive: true);
+    expect(content.imageFiles('ios', 'es-ES', 'iphone'), isEmpty,
+        reason: 'an own folder overrides rendered images');
+    own.deleteSync();
+    final out = Directory('${project.root.path}/rendered');
+    content.exportTo(out, ['ios'], scope: 'images');
+    expect(
+        File('${out.path}/ios/screenshots/es-MX/000_iphone_01.jpg')
+            .existsSync(),
+        isTrue);
+    File('${rendered.path}/02.jpg')
+        .writeAsBytesSync(img.encodeJpg(img.Image(width: 1080, height: 1920)));
+    expect(content.validate(['ios'], scope: 'images'), hasLength(2));
   });
 }

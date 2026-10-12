@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- `store/listing/<language>.json`: one store text per language. `torchinlane store generate` fills every
+  Apple and Google locale of each language (regional variants share it; release notes are kept).
+  `torchinlane store languages` lists the 72 language codes.
+- Rendered screenshots in `store/screenshots/<language>/<iphone|ipad|play|feature>/` are used for every
+  locale of their language unless the locale has its own `images/` folder. `store/screenshots/` is gitignored
+  (run `torchinlane update -y`).
+- Image validation reads only image headers (and PNG pixels for the alpha check): thousands of images validate fast.
+
 ## 0.2.10
 
 - Release notes file `<locale>/<version>.txt` is used whole; no `## <version>` heading. build.sh creates empty files.

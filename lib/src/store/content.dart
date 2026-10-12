@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
@@ -39,6 +40,19 @@ const imageGroups = {
     'featureGraphic',
     'tvBanner'
   ],
+};
+
+/// Rendered screenshots live once per language in
+/// `store/screenshots/<language>/<kind>/`; each image group reads one kind for
+/// every locale of that language that has no own folder for the group.
+const renderedImageKinds = {
+  'ios': {'iphone': 'iphone', 'ipad': 'ipad'},
+  'android': {
+    'phoneScreenshots': 'play',
+    'sevenInchScreenshots': 'ipad',
+    'tenInchScreenshots': 'ipad',
+    'featureGraphic': 'feature'
+  },
 };
 
 int storeFieldLength(String platform, String field, String text) =>
@@ -121,12 +135,45 @@ class StoreContent {
     return Directory('${directory.path}/$platform/images/$locale/$group');
   }
 
-  List<File> imageFiles(String platform, String locale, String group) {
+  List<File> imageFiles(String platform, String locale, String group,
+      {bool rendered = true}) {
     final dir = images(platform, locale, group);
-    return dir.existsSync()
-        ? (dir.listSync().whereType<File>().toList()
-          ..sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path))))
+    if (dir.existsSync()) return _sorted(dir.listSync().whereType<File>());
+    final kind = renderedImageKinds[platform]![group];
+    if (!rendered || kind == null) return [];
+    final source = Directory(
+        '${directory.path}/screenshots/${listingLanguage(locale)}/$kind');
+    return source.existsSync()
+        ? _sorted(source.listSync().whereType<File>().where((f) => [
+              '.png',
+              '.jpg',
+              '.jpeg'
+            ].contains(p.extension(f.path).toLowerCase())))
         : [];
+  }
+
+  static List<File> _sorted(Iterable<File> files) => files.toList()
+    ..sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
+
+  /// Locales with own image folders plus every locale of a rendered language.
+  List<String> imageLocales(String platform) {
+    final own = Directory('${directory.path}/$platform/images');
+    final rendered = Directory('${directory.path}/screenshots');
+    final languages = rendered.existsSync()
+        ? rendered
+            .listSync()
+            .whereType<Directory>()
+            .map((d) => p.basename(d.path))
+            .toSet()
+        : <String>{};
+    return {
+      if (own.existsSync())
+        ...own.listSync().whereType<Directory>().map((d) => p.basename(d.path)),
+      for (final locale
+          in platform == 'ios' ? appleStoreLocales : googleStoreLocales)
+        if (languages.contains(listingLanguage(locale))) locale,
+    }.toList()
+      ..sort();
   }
 
   // Never allow assets or symlinks to escape store/. Used by GUI and export.
@@ -155,15 +202,7 @@ class StoreContent {
       {String scope = 'all', bool skipNotes = false}) {
     final errors = <String>[];
     for (final platform in platforms) {
-      final imageDir = Directory('${directory.path}/$platform/images');
-      final targets = {
-        ...locales(platform),
-        if (imageDir.existsSync())
-          ...imageDir
-              .listSync()
-              .whereType<Directory>()
-              .map((d) => p.basename(d.path))
-      };
+      final targets = {...locales(platform), ...imageLocales(platform)};
       for (final locale in targets) {
         try {
           checkLocale(platform, locale);
@@ -226,9 +265,9 @@ class StoreContent {
                     '$platform/$locale/$group/${p.basename(f.path)}: $issue');
                 continue;
               }
-              final decoded = img.decodeImage(f.readAsBytesSync())!;
+              final (w, h) = _dimensions(f.readAsBytesSync())!;
               final size = platform == 'ios'
-                  ? '${decoded.width < decoded.height ? decoded.width : decoded.height}x${decoded.width > decoded.height ? decoded.width : decoded.height}'
+                  ? '${w < h ? w : h}x${w > h ? w : h}'
                   : group;
               counts[size] = (counts[size] ?? 0) + 1;
             }
@@ -251,22 +290,28 @@ class StoreContent {
       return 'PNG or JPEG required';
     }
     if (file.lengthSync() > 20 * 1024 * 1024) return 'Image exceeds 20 MB';
-    final image = img.decodeImage(file.readAsBytesSync());
-    if (image == null) return 'Invalid image';
-    final w = image.width, h = image.height;
+    final bytes = file.readAsBytesSync();
+    final dimensions = _dimensions(bytes);
+    if (dimensions == null) return 'Invalid image';
+    final (w, h) = dimensions;
+    // JPEG has no alpha channel; only PNG pixels are decoded for the check.
+    String? alpha() {
+      if (img.findFormatForData(bytes) != img.ImageFormat.png) return null;
+      final image = img.decodePng(bytes);
+      return image == null ? 'Invalid image' : _alpha(image);
+    }
+
     if (platform == 'android') {
       if (group == 'icon') {
         return w == 512 && h == 512 ? null : 'Icon must be 512x512';
       }
       if (group == 'featureGraphic') {
         return w == 1024 && h == 500
-            ? _alpha(image)
+            ? alpha()
             : 'Feature graphic must be 1024x500';
       }
       if (group == 'tvBanner') {
-        return w == 1280 && h == 720
-            ? _alpha(image)
-            : 'TV banner must be 1280x720';
+        return w == 1280 && h == 720 ? alpha() : 'TV banner must be 1280x720';
       }
       if (w < 320 ||
           h < 320 ||
@@ -276,7 +321,7 @@ class StoreContent {
           h > w * 2) {
         return 'Screenshots: 320–3840 px; longest side at most twice shortest';
       }
-      return _alpha(image);
+      return alpha();
     }
     final size = '${w < h ? w : h}x${w > h ? w : h}';
     const phone = {
@@ -306,7 +351,14 @@ class StoreContent {
     if (!(group == 'ipad' ? tablet : phone).contains(size)) {
       return 'Unsupported $group screenshot dimensions $w x $h';
     }
-    return _alpha(image);
+    return alpha();
+  }
+
+  /// Header-only read: rendered sets hold thousands of images.
+  static (int, int)? _dimensions(List<int> bytes) {
+    final data = Uint8List.fromList(bytes);
+    final info = img.findDecoderForData(data)?.startDecode(data);
+    return info == null ? null : (info.width, info.height);
   }
 
   static String? _alpha(img.Image image) {
@@ -352,10 +404,7 @@ class StoreContent {
         }
       }
       if (scope == 'notes' || scope == 'metadata') continue;
-      final imageRoot = Directory('${directory.path}/$platform/images');
-      if (!imageRoot.existsSync()) continue;
-      for (final localeDir in imageRoot.listSync().whereType<Directory>()) {
-        final locale = p.basename(localeDir.path);
+      for (final locale in imageLocales(platform)) {
         for (final group in imageGroups[platform]!) {
           final files = imageFiles(platform, locale, group);
           for (var i = 0; i < files.length; i++) {

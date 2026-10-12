@@ -103,7 +103,8 @@ class StudioServer {
     try {
       if (request.uri.path == '/asset' && request.method == 'GET') {
         final relative = request.uri.queryParameters['path'] ?? '';
-        if (!RegExp(r'^(ios|android)/images/').hasMatch(relative) ||
+        if (!RegExp(r'^((ios|android)/images|screenshots)/')
+                .hasMatch(relative) ||
             !['.png', '.jpg', '.jpeg']
                 .contains(p.extension(relative).toLowerCase())) {
           throw ArgumentError('Invalid image');
@@ -325,7 +326,8 @@ class StudioServer {
               final platform = data['platform'] as String,
                   locale = data['locale'] as String,
                   group = data['group'] as String;
-              final files = content.imageFiles(platform, locale, group);
+              final files =
+                  content.imageFiles(platform, locale, group, rendered: false);
               final ordered = List<String>.from(data['paths'] as List);
               final expected = files
                   .map((f) => p.relative(f.path, from: content.directory.path))

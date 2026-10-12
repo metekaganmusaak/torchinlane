@@ -161,6 +161,7 @@ class FastlaneScaffolder {
       '**/fastlane/README.md',
       '**/*.bak',
       'store/.snapshots/',
+      'store/screenshots/',
       '.torchinlane/',
       'gha-creds-*.json',
       'debug-info-archive/',

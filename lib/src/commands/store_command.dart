@@ -4,6 +4,7 @@ import '../changelog/locale_maps.dart';
 import '../config/torchinlane_config.dart';
 import '../project/flutter_project.dart';
 import '../store/content.dart';
+import '../store/listing.dart';
 import '../store/service.dart';
 import '../store/translation.dart';
 import '../store/translation_task.dart';
@@ -13,6 +14,8 @@ class StoreCommand extends Command<int> {
     for (final action in [
       'init',
       'locales',
+      'languages',
+      'generate',
       'validate',
       'export',
       'push',
@@ -68,6 +71,10 @@ class _StoreAction extends Command<int> {
         'init':
             'Create editable locale JSON files without overwriting content.',
         'locales': 'List supported native locale codes for each store.',
+        'languages':
+            'List store/listing/<language>.json codes and the store locales each fills.',
+        'generate':
+            'Fill every Apple/Google locale file from store/listing/<language>.json.',
         'validate': 'Check field limits, URLs, image dimensions and counts.',
         'export': 'Export content in Fastlane directory layout.',
         'push': 'Upload store content without building or publishing a binary.',
@@ -85,6 +92,13 @@ class _StoreAction extends Command<int> {
       for (final platform in platforms) {
         stdout.writeln(
             '$platform: ${(platform == 'ios' ? appleStoreLocales : googleStoreLocales).join(', ')}');
+      }
+      return 0;
+    }
+    if (action == 'languages') {
+      for (final e in listingLanguages.entries) {
+        stdout.writeln(
+            '${e.key.padRight(8)} ios: ${e.value['ios']!.join(', ')}  android: ${e.value['android']!.join(', ')}');
       }
       return 0;
     }
@@ -106,6 +120,15 @@ class _StoreAction extends Command<int> {
       content.initialize(platforms, locales);
       stdout.writeln(
           'Store files created in store/. Existing content preserved.');
+      return 0;
+    }
+    if (action == 'generate') {
+      final counts = StoreListing(content).generate(platforms,
+          from: args['from'] as String, dryRun: args['dry-run'] as bool);
+      stdout.writeln(counts.entries
+          .map((e) =>
+              '${e.key}: ${e.value} locale files ${args['dry-run'] as bool ? 'valid (dry run)' : 'written'}')
+          .join('\n'));
       return 0;
     }
     final scope = args['scope'] as String;

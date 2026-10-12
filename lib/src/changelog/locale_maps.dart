@@ -389,3 +389,36 @@ List<String> parsePlatforms(String value) {
   }
   return values;
 }
+
+/// The language a native store locale is written in. Regional variants share
+/// one text (en-GB = en, es-419 = es); scripts and pt regions stay separate.
+String listingLanguage(String storeLocale) =>
+    const {
+      'zh-CN': 'zh-Hans',
+      'zh-Hans': 'zh-Hans',
+      'zh-TW': 'zh-Hant',
+      'zh-HK': 'zh-Hant',
+      'zh-Hant': 'zh-Hant',
+      'pt-BR': 'pt-BR',
+      'pt-PT': 'pt-PT',
+      'iw-IL': 'he',
+    }[storeLocale] ??
+    storeLocale.split('-').first;
+
+/// Every language either store supports, each with its native store locales.
+Map<String, Map<String, List<String>>> get listingLanguages {
+  final result = <String, Map<String, List<String>>>{};
+  for (final (platform, locales) in [
+    ('ios', appleStoreLocales),
+    ('android', googleStoreLocales)
+  ]) {
+    for (final locale in locales) {
+      result
+          .putIfAbsent(listingLanguage(locale),
+              () => {'ios': [], 'android': []})[platform]!
+          .add(locale);
+    }
+  }
+  return Map.fromEntries(
+      result.entries.toList()..sort((a, b) => a.key.compareTo(b.key)));
+}

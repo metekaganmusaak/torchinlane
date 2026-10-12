@@ -156,6 +156,41 @@ Long text is rejected instead of truncated. Images are checked for format,
 dimensions, transparency and count. These checks do not replace store review
 or all device-specific promotional eligibility rules.
 
+### One text per language (recommended for many languages)
+
+Instead of editing dozens of locale files, write one file per language and let
+torchinlane fill every Apple and Google locale of it (`en` → en-US, en-GB,
+en-AU, … on both stores; `es` → es-ES, es-MX, es-419, es-US; `zh-Hant` →
+zh-Hant, zh-TW, zh-HK):
+
+```text
+store/
+  listing/
+    en.json        # name, subtitle, short_description, description, keywords,
+    de.json        # promotional_text, tagline, screenshots[], URLs (en only)
+  screenshots/     # rendered images, gitignored
+    de/iphone/01.jpg   ipad/  play/  feature/
+```
+
+```bash
+torchinlane store languages   # the 72 language codes and the locales each fills
+torchinlane store generate    # listing/*.json → ios/*.json + android/*.json
+```
+
+`name` → Apple `name` + Google `title`; `description` → Apple `description` +
+Google `full_description`; `subtitle`, `keywords`, `promotional_text` → Apple;
+`short_description` → Google. `support_url`, `marketing_url`, `privacy_url`,
+`video` come from the source language unless a language sets its own.
+`tagline` and `screenshots` (headlines) are for screenshot generators and are
+never uploaded. Release notes stay untouched. Nothing is written when any value
+breaks a store limit.
+
+Rendered screenshots in `store/screenshots/<language>/<kind>/` are used for
+every locale of that language that has no own `images/<locale>/<group>/`
+folder: `iphone` → Apple iphone, `ipad` → Apple ipad + Google 7″/10″ tablet,
+`play` → Google phone (Google rejects images longer than 2:1, so the 6.9″
+iPhone size cannot be reused), `feature` → Google feature graphic.
+
 ```bash
 # Print a task to paste into Claude Code/Codex (no API request):
 torchinlane store translate --from en --locales tr,de,pt-PT

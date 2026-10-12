@@ -2,8 +2,12 @@
 
 ## Storage and locale policy
 
-`store/<platform>/<native-locale>.json` is the source of truth for new store
-content. `store/<platform>/images/<native-locale>/<group>/` holds image files.
+`store/<platform>/<native-locale>.json` holds the uploaded text per store locale.
+`store/<platform>/images/<native-locale>/<group>/` holds image files. When
+`store/listing/<language>.json` is used, it is the source and `store generate`
+overwrites the listing fields of every locale of that language; see README
+"One text per language". Rendered `store/screenshots/<language>/<kind>/` images
+fill locales that have no own image folder for a group.
 Locale codes are exact/case-sensitive. Use `store locales` to list them.
 Commands accepting locale selections also understand legacy aliases (`en`,
 `tr`, `pt`, `zh`, `tl`). Aliases map explicitly; unsupported entries are skipped
