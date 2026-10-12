@@ -179,15 +179,21 @@ void main() {
     final changelogs = Directory('${project.root.path}/changelogs');
     File('${changelogs.path}/en/1.2.0+42.txt')
       ..createSync(recursive: true)
-      ..writeAsStringSync('- New\n');
+      ..writeAsStringSync('- ✨ New\n- 🛡️ Safe\n');
     expect(listingReleaseNotes(changelogs, 'de', '1.2.0+42', ['en']), isNull);
     content.write('ios', 'de-DE', {'release_notes': 'Old'});
     final notes = listingReleaseNotes(
         changelogs, 'en', '1.2.0+42', listing.languages())!;
-    expect(notes, {'en': '- New'});
+    expect(notes, {'en': '- ✨ New\n- 🛡️ Safe'});
     listing.generate(['ios', 'android'], releaseNotes: notes);
-    expect(content.read('ios', 'en-GB')['release_notes'], '- New');
-    expect(content.read('android', 'en-IN')['release_notes'], '- New');
+    expect(content.read('ios', 'en-GB')['release_notes'], '- New\n- Safe',
+        reason: 'Apple rejects emoji in What\'s New');
+    expect(content.read('android', 'en-IN')['release_notes'],
+        '- ✨ New\n- 🛡️ Safe');
+    expect(content.validate(['ios'], scope: 'notes'), isEmpty);
+    content.write('ios', 'en-US', {'release_notes': '- 🌍 Hi'});
+    expect(content.validate(['ios'], scope: 'notes'),
+        ['ios/en-US/release_notes: Apple rejects emoji']);
     expect(content.read('ios', 'de-DE').containsKey('release_notes'), isFalse);
     expect(
         () => listing.generate(['android'], releaseNotes: {'en': 'x' * 501}),

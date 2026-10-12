@@ -159,6 +159,20 @@ $lanes[:beta].call
     expect(firstLines.first['release_notes'], isNull);
     expect(firstLines.last['localized']['en-US']['whats_new'], 'Fixed a bug');
   }, skip: Platform.isWindows ? 'Requires Ruby' : false);
+  test('Apple notes drop emoji', () async {
+    File('${project.root.path}/changelogs/en/release_notes.txt')
+        .writeAsStringSync('- ✨ New look\n- 🛡️ Safer');
+    final result = await Process.run('ruby', [
+      '-e',
+      r'''require ARGV[0]; puts JSON.generate(ChangelogHelper.app_store_release_notes(ARGV[1])); puts ChangelogHelper.testflight_changelog(ARGV[1], 'en')''',
+      '${project.root.path}/fastlane/ChangelogHelper.rb',
+      '${project.root.path}/changelogs'
+    ]);
+    expect(result.exitCode, 0, reason: result.stderr.toString());
+    final lines = (result.stdout as String).trim().split('\n');
+    expect(jsonDecode(lines.first)['en-US'], '- New look\n- Safer');
+    expect(lines.sublist(1).join('\n'), '- New look\n- Safer');
+  }, skip: Platform.isWindows ? 'Requires Ruby' : false);
   test('store JSON notes override legacy notes only when explicitly enabled',
       () async {
     File('${project.root.path}/changelogs/en/release_notes.txt')
@@ -236,5 +250,96 @@ end
     expect(result.exitCode, 0, reason: result.stderr.toString());
     expect(jsonDecode(result.stdout as String),
         {'en-US': 'New English', 'tr-TR': 'Türkçe'});
+  }, skip: Platform.isWindows ? 'Requires Ruby' : false);
+  test('Google images upload in short edits so none expires', () async {
+    for (var i = 0; i < 10; i++) {
+      Directory('${project.root.path}/staging/l$i').createSync(recursive: true);
+    }
+    final mockDir = Directory('${project.root.path}/mock')..createSync();
+    File('${mockDir.path}/supply.rb').writeAsStringSync(r'''
+module FastlaneCore
+  class Configuration
+    def self.create(_, values); values; end
+  end
+end
+module Supply
+  class << self; attr_accessor :config; end
+  module Options; def self.available_options; []; end; end
+  class FakeClient
+    attr_accessor :current_edit
+    def begin_edit(**); @current_edit = []; end
+    def listing_for_language(locale); locale; end
+    def commit_current_edit!; puts @current_edit.join(','); @current_edit = nil; end
+    def abort_current_edit; @current_edit = nil; end
+  end
+  class Uploader
+    def client; @client ||= FakeClient.new; end
+    def upload_metadata(locale, _); client.current_edit << "m:#{locale}"; end
+    def upload_images(locale); client.current_edit << "i:#{locale}"; end
+    def upload_screenshots(_); end
+  end
+end
+''');
+    final result = await Process.run('ruby', [
+      '-I',
+      mockDir.path,
+      '-e',
+      r'''require ARGV[0]; StoreHelper.google_upload(metadata_path: ARGV[1], scope: 'all', track_name: 'production')''',
+      '${project.root.path}/fastlane/StoreHelper.rb',
+      '${project.root.path}/staging'
+    ]);
+    expect(result.exitCode, 0, reason: result.stderr.toString());
+    final edits = (result.stdout as String).trim().split('\n');
+    expect(edits, hasLength(3));
+    expect(edits[0].split(','), hasLength(10));
+    expect(edits[0], startsWith('m:l0'));
+    expect(edits[1].split(','), hasLength(8));
+    expect(edits[2], 'i:l8,i:l9');
+  }, skip: Platform.isWindows ? 'Requires Ruby' : false);
+  test('App Store helpers explain bad version names and guard screenshot sync',
+      () async {
+    final mockDir = Directory('${project.root.path}/mock')..createSync();
+    File('${mockDir.path}/spaceship_stub.rb').writeAsStringSync(r'''
+module FastlaneCore; module UI; def self.user_error!(m); raise m; end; end; end
+class Fake
+  def initialize(**attrs); @attrs = attrs; end
+  def method_missing(name, *_args, **_opts); @attrs.fetch(name) { super }; end
+  def respond_to_missing?(name, all = false); @attrs.key?(name) || super; end
+end
+module Spaceship; module ConnectAPI; class App
+  def self.find(_)
+    shots = ->(n) { [Fake.new(app_screenshots: Array.new(n))] }
+    locs = [Fake.new(locale: 'en-US', get_app_screenshot_sets: shots[3]),
+            Fake.new(locale: 'de-DE', get_app_screenshot_sets: shots[ENV['DE_SHOTS'].to_i])]
+    Fake.new(get_edit_app_store_version: Fake.new(get_app_store_version_localizations: locs))
+  end
+end; end; end
+''');
+    final shots = Directory('${project.root.path}/shots/en-US')
+      ..createSync(recursive: true);
+    Future<String> run(String code, {String deShots = '0'}) async {
+      final result = await Process.run(
+          'ruby',
+          [
+            '-I',
+            mockDir.path,
+            '-e',
+            'require "spaceship_stub"; require ARGV[0]; $code',
+            '${project.root.path}/fastlane/StoreHelper.rb',
+            shots.parent.path
+          ],
+          environment: {'DE_SHOTS': deShots});
+      return '${result.stdout}${result.stderr}';
+    }
+
+    expect(
+        await run(
+            'StoreHelper.with_version_hint { raise ArgumentError, "Malformed version number string 2.0.0 + 13" }'),
+        contains("named '2.0.0 + 13'. Rename it"));
+    expect(await run('p StoreHelper.screenshot_sync_safe?(ARGV[1])'), 'true\n',
+        reason: 'de-DE has no screenshots to lose');
+    expect(await run('p StoreHelper.screenshot_sync_safe?(ARGV[1])', deShots: '2'),
+        'false\n',
+        reason: 'sync would delete de-DE screenshots that have no local copy');
   }, skip: Platform.isWindows ? 'Requires Ruby' : false);
 }

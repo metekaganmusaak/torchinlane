@@ -55,6 +55,11 @@ const renderedImageKinds = {
   },
 };
 
+/// App Store Connect rejects emoji in What's New; Google Play keeps them.
+final appleRejectedEmoji =
+    RegExp(r'[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+ *', unicode: true);
+String appleText(String text) => text.replaceAll(appleRejectedEmoji, '').trim();
+
 int storeFieldLength(String platform, String field, String text) =>
     platform == 'ios' && field == 'keywords'
         ? utf8.encode(text).length
@@ -224,6 +229,11 @@ class StoreContent {
                 storeFieldLength(platform, field.key, field.value) > max) {
               errors.add(
                   '$platform/$locale/${field.key}: ${storeFieldLength(platform, field.key, field.value)}/$max ${platform == 'ios' && field.key == 'keywords' ? 'UTF-8 bytes' : 'characters'}');
+            }
+            if (platform == 'ios' &&
+                field.key == 'release_notes' &&
+                appleRejectedEmoji.hasMatch(field.value)) {
+              errors.add('$platform/$locale/release_notes: Apple rejects emoji');
             }
             if (field.key == 'name' &&
                 field.value.isNotEmpty &&

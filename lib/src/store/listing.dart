@@ -109,7 +109,9 @@ class StoreListing {
           }
           fields[e.value] = text;
         }
-        final notes = releaseNotes?[language] ?? '';
+        final languageNotes = releaseNotes?[language] ?? '';
+        final notes =
+            platform == 'ios' ? appleText(languageNotes) : languageNotes;
         if (notes.isNotEmpty) {
           final max = storeFields[platform]!['release_notes']!;
           if (notes.runes.length > max) {

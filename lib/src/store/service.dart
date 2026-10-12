@@ -10,6 +10,30 @@ import 'content.dart';
 
 typedef StoreLog = void Function(String text);
 
+/// Apple locales fastlane's deliver knows only from 2.234.0 on: older versions
+/// reject their folders, or silently drop them when that check is skipped.
+const fastlane2234AppleLocales = {
+  'bn-BD', 'gu-IN', 'kn-IN', 'ml-IN', 'mr-IN', 'or-IN', 'pa-IN', 'sl-SI', //
+  'ta-IN', 'te-IN', 'ur-PK',
+};
+
+String? fastlaneLocaleError(
+    String? fastlaneVersion, Iterable<String> iosLocales) {
+  final newer = iosLocales
+      .where(fastlane2234AppleLocales.contains)
+      .toSet()
+      .toList()
+    ..sort();
+  if (newer.isEmpty || fastlaneVersion == null) return null;
+  final parts =
+      fastlaneVersion.split('.').map((s) => int.tryParse(s) ?? 0).toList();
+  final older =
+      parts[0] < 2 || (parts[0] == 2 && parts.length > 1 && parts[1] < 234);
+  if (!older) return null;
+  return 'fastlane $fastlaneVersion cannot upload Apple locales ${newer.join(', ')}; '
+      'update to 2.234.0 or newer (`brew upgrade fastlane` or `gem update fastlane`).';
+}
+
 class StoreService {
   StoreService(this.project, {StoreLog? log}) : log = log ?? stdout.writeln;
   final FlutterProject project;
@@ -75,6 +99,17 @@ class StoreService {
     if (hasGoogleNotes && versionCode == null) {
       throw ArgumentError(
           'Android notes require --version-code to select an existing release.');
+    }
+    if (platforms.contains('ios')) {
+      final iosLocales = {
+        ...content.locales('ios'),
+        ...content.imageLocales('ios')
+      };
+      if (iosLocales.any(fastlane2234AppleLocales.contains)) {
+        final error = fastlaneLocaleError(
+            const Toolchain().inspect(RubyGem.fastlane).version, iosLocales);
+        if (error != null) throw StateError(error);
+      }
     }
     log('Store upload: ${platforms.join(', ')}; scope=$scope; track=$track; version=${versionCode ?? appVersion ?? 'editable'}');
     if (replaceImages) {

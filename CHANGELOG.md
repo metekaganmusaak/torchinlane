@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.2
+
+Run `torchinlane update -y` in each app: the fastlane helpers changed.
+
+- Apple release notes (App Store, TestFlight, `store generate`) drop emoji: App Store Connect rejects them in
+  What's New. Google Play keeps them. `store validate` flags emoji left in iOS notes.
+- Google store uploads use separate edits: texts, images in batches of 8 locales, then notes. One edit for
+  every locale's images expired mid-upload ("This edit has expired"); committed batches are skipped on retry.
+- `deploy` scans the built iOS app and its frameworks for APIs that need an Info.plist purpose string
+  (Photos, camera, location, contacts…) and stops before the upload instead of Apple rejecting the build
+  (ITMS-90683) and using up its build number.
+- `store push` stops when fastlane is older than 2.234.0 and `store/ios` holds Apple's newer locales (bn-BD,
+  kn-IN, sl-SI, ur-PK…); old deliver rejects or silently drops them.
+- `store push --replace-images` on Apple syncs screenshots (uploads only new or changed ones) when no App Store
+  localization without local images would lose its screenshots; otherwise it replaces them as before.
+- Apple uploads skip precheck (it cannot read in-app purchases with an API key and only matters before a review
+  submission, which torchinlane never does). An App Store version named like `2.0.0 + 13` gets a clear message.
+- New projects get changelog folders named with `store languages` codes (`pt-BR`, `zh-Hans`, `fil`).
+
 ## 0.3.1
 
 - `torchinlane store generate` also fills release notes: `changelogs/<language>/<version>.txt` goes to every

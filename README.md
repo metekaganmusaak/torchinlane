@@ -347,6 +347,45 @@ localized What to Test text and wait for processing when notes are supplied
 (up to 30 minutes); tester assignment and external beta review remain Apple
 requirements.
 
+### Project layout torchinlane expects
+
+```text
+torchinlane.yaml
+changelogs/<language>/<pubspec version>.txt   # `- ` bullets; <language> = a store/listing code
+store/listing/<language>.json                 # one store text per language
+store/screenshots/<language>/<iphone|ipad|play|feature>/
+store/ios/*.json, store/android/*.json        # written by `store generate`; do not hand-edit
+fastlane/, ios/fastlane/, android/fastlane/   # managed; refresh with `torchinlane update -y`
+```
+
+Use the `torchinlane store languages` codes for changelog folders too (`pt-BR`,
+`zh-Hans`, `fil`; not `pt`, `zh`, `tl`).
+
+### Checks that run before anything is uploaded
+
+Each one stops a problem that the stores would otherwise reject after the
+upload (Apple then counts the build number as used):
+
+- Two `changelogs/` folders that feed one store locale, or notes over the limit
+  (`deploy`, `deploy --dry-run`, `store validate`).
+- Emoji in Apple release notes: they are removed for App Store/TestFlight and
+  kept for Google Play. `store validate` flags emoji left in `store/ios/*.json`.
+- Missing Info.plist purpose strings (ITMS-90683): after `flutter build ipa`,
+  the app and every framework are scanned for Photos, camera, location,
+  contacts, calendar, Bluetooth, motion, health, speech and media-library APIs.
+  A dependency's unused picker is enough to trigger it: add the purpose string
+  or switch that code off (e.g. `Pod::PICKER_MEDIA = false` for file_picker).
+- fastlane older than 2.234.0 when `store/ios` holds Apple's newer locales
+  (bn-BD, gu-IN, kn-IN, ml-IN, mr-IN, or-IN, pa-IN, sl-SI, ta-IN, te-IN, ur-PK).
+- An App Store version named anything but X.Y.Z (e.g. `2.0.0 + 13`) gets a clear
+  message instead of a crash.
+
+Google store uploads commit in small edits (texts, 8 locales of images at a
+time, notes), so a long upload cannot expire and a rerun skips committed
+images. `store push --replace-images` on Apple uploads only new or changed
+screenshots when every App Store localization with screenshots also has local
+images; otherwise it replaces them all.
+
 The generated `sh scripts/build.sh` remains available for terminal-guided
 build/version/release-note prompts. Release notes are retained after successful
 upload for audit and retry; use `changelog clear` explicitly to remove them.

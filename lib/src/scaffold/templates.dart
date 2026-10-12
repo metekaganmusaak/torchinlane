@@ -129,13 +129,14 @@ platform :ios do
       metadata_path: Dir.mktmpdir('torchinlane-deliver-notes'),
       skip_metadata: skip_release_notes || release_notes.empty?,
       skip_screenshots: true,
-      skip_app_version_update: false
+      skip_app_version_update: false,
+      run_precheck_before_submit: false
     }
 
     deliver_options[:release_notes] = release_notes if !skip_release_notes && !release_notes.empty?
 
     begin
-      deliver(deliver_options)
+      StoreHelper.with_version_hint { deliver(deliver_options) }
     ensure
       FileUtils.remove_entry(deliver_options[:metadata_path])
     end

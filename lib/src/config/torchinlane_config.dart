@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:yaml/yaml.dart';
 
+/// `store/listing` language codes, so changelog folders and listings share names.
 const defaultLocales = [
   'ar',
   'bn',
@@ -14,6 +15,7 @@ const defaultLocales = [
   'es',
   'fa',
   'fi',
+  'fil',
   'fr',
   'he',
   'hi',
@@ -25,17 +27,16 @@ const defaultLocales = [
   'nl',
   'no',
   'pl',
-  'pt',
+  'pt-BR',
   'ro',
   'ru',
   'sk',
   'sv',
   'th',
-  'tl',
   'tr',
   'uk',
   'vi',
-  'zh',
+  'zh-Hans',
 ];
 
 class IosConfig {

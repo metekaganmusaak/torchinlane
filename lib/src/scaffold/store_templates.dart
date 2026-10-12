@@ -26,10 +26,32 @@ module StoreHelper
     raise 'App Store Connect app record not found' unless app
     !app.get_live_app_store_version(platform: 'IOS').nil?
   end
+  # Deliver parses every App Store version name as X.Y.Z; a hand-typed one like "2.0.0 + 13" crashes it.
+  def self.with_version_hint
+    yield
+  rescue ArgumentError => e
+    raise unless e.message.start_with?('Malformed version number string')
+    FastlaneCore::UI.user_error!("App Store Connect has an app version named '#{e.message.delete_prefix('Malformed version number string ')}'. " \
+                                 "Rename it to the app's X.Y.Z (e.g. 2.0.0); the build number is picked separately.")
+  end
+  # Deliver's screenshot sync makes every localization of the version match the local
+  # folders, so it runs only when no localization without local images has screenshots.
+  def self.screenshot_sync_safe?(screenshots_path)
+    local = File.directory?(screenshots_path) ? Dir.children(screenshots_path) : []
+    return false if local.empty?
+    app = Spaceship::ConnectAPI::App.find(config.fetch('ios').fetch('bundle_id'))
+    version = app&.get_edit_app_store_version(platform: 'IOS')
+    return false unless version
+    version.get_app_store_version_localizations.all? do |localization|
+      local.include?(localization.locale) ||
+        localization.get_app_screenshot_sets.all? { |set| set.app_screenshots.to_a.empty? }
+    end
+  end
   def self.staging(platform)
     root = ENV.fetch('TORCHINLANE_STORE_STAGING')
     File.join(root, platform)
   end
+  GOOGLE_IMAGE_LOCALES_PER_EDIT = 8
   # Supply's default changelog uploader replaces the entire release_notes array.
   # Independent content uploads merge only supplied locales and preserve status,
   # version codes, other releases and omitted listing fields/image groups.
@@ -42,39 +64,47 @@ module StoreHelper
     })
     uploader = Supply::Uploader.new
     client = uploader.send(:client)
-    client.begin_edit(package_name: Supply.config[:package_name])
-    begin
-      locales = Dir.children(metadata_path).select { |l| File.directory?(File.join(metadata_path, l)) && !l.start_with?('.') }
-      locales.each do |locale|
-        uploader.upload_metadata(locale, client.listing_for_language(locale)) if ['all', 'metadata'].include?(scope)
-        if ['all', 'images'].include?(scope)
-          uploader.upload_images(locale)
-          uploader.upload_screenshots(locale)
-        end
-      end
-      if ['all', 'notes'].include?(scope)
-        supplied = {}
-        locales.each do |locale|
-          file = File.join(metadata_path, locale, 'changelogs', "#{version_code}.txt")
-          next unless File.file?(file)
-          text = File.read(file, encoding: 'UTF-8').strip
-          supplied[locale] = text unless text.empty?
-        end
-        unless supplied.empty?
-          raise 'Existing version code required for note updates' unless version_code
-          track = client.tracks(track_name).first
-          raise "Track not found: #{track_name}" unless track
-          release = (track.releases || []).find { |r| (r.version_codes || []).map(&:to_s).include?(version_code.to_s) }
-          raise "Version #{version_code} not found on #{track_name}" unless release
-          merged = (release.release_notes || []).to_h { |note| [note.language, note.text] }.merge(supplied)
-          release.release_notes = merged.map { |locale, text| ::AndroidPublisher::LocalizedText.new(language: locale, text: text) }
-          client.update_track(track_name, track)
-        end
-      end
-      client.commit_current_edit!
-    ensure
-      client.abort_current_edit if client.current_edit
+    locales = Dir.children(metadata_path).select { |l| File.directory?(File.join(metadata_path, l)) && !l.start_with?('.') }.sort
+    if ['all', 'metadata'].include?(scope)
+      google_edit(client) { locales.each { |locale| uploader.upload_metadata(locale, client.listing_for_language(locale)) } }
     end
+    if ['all', 'images'].include?(scope)
+      # One edit expires before images for ~25 locales finish; committed batches are skipped on retry (sync_image_upload).
+      locales.each_slice(GOOGLE_IMAGE_LOCALES_PER_EDIT) do |batch|
+        google_edit(client) do
+          batch.each do |locale|
+            uploader.upload_images(locale)
+            uploader.upload_screenshots(locale)
+          end
+        end
+      end
+    end
+    return unless ['all', 'notes'].include?(scope)
+    supplied = {}
+    locales.each do |locale|
+      file = File.join(metadata_path, locale, 'changelogs', "#{version_code}.txt")
+      next unless File.file?(file)
+      text = File.read(file, encoding: 'UTF-8').strip
+      supplied[locale] = text unless text.empty?
+    end
+    return if supplied.empty?
+    raise 'Existing version code required for note updates' unless version_code
+    google_edit(client) do
+      track = client.tracks(track_name).first
+      raise "Track not found: #{track_name}" unless track
+      release = (track.releases || []).find { |r| (r.version_codes || []).map(&:to_s).include?(version_code.to_s) }
+      raise "Version #{version_code} not found on #{track_name}" unless release
+      merged = (release.release_notes || []).to_h { |note| [note.language, note.text] }.merge(supplied)
+      release.release_notes = merged.map { |locale, text| ::AndroidPublisher::LocalizedText.new(language: locale, text: text) }
+      client.update_track(track_name, track)
+    end
+  end
+  def self.google_edit(client)
+    client.begin_edit(package_name: Supply.config[:package_name])
+    yield
+    client.commit_current_edit!
+  ensure
+    client.abort_current_edit if client.current_edit
   end
 
 end
@@ -127,10 +157,17 @@ const iosStoreLanes = r'''
       skip_metadata: scope == 'images',
       skip_screenshots: !['all', 'images'].include?(scope),
       overwrite_screenshots: ENV['TORCHINLANE_REPLACE_IMAGES'] == '1',
-      submit_for_review: false, automatic_release: false, force: true
+      submit_for_review: false, automatic_release: false, force: true,
+      # Precheck only matters before a review submission and cannot read IAPs with an API key.
+      run_precheck_before_submit: false
     }
     options[:app_version] = ENV['TORCHINLANE_APP_VERSION'] if ENV['TORCHINLANE_APP_VERSION']
-    deliver(options)
+    if options[:overwrite_screenshots] && !options[:skip_screenshots] && StoreHelper.screenshot_sync_safe?(options[:screenshots_path])
+      # Uploads only new or changed screenshots instead of replacing all of them.
+      ENV['FASTLANE_ENABLE_BETA_DELIVER_SYNC_SCREENSHOTS'] = '1'
+      options[:sync_screenshots] = true
+    end
+    StoreHelper.with_version_hint { deliver(options) }
   end
 
   desc "Download store texts into a temporary snapshot"
@@ -299,13 +336,18 @@ module ChangelogHelper
     if ENV['TORCHINLANE_USE_STORE_NOTES'] == '1'
       return app_store_release_notes(dir)[REGISTRY.fetch('ios')[locale]].to_s
     end
-    text = note_text(dir, locale)
+    text = apple_text(note_text(dir, locale))
     raise 'TestFlight notes exceed 4000 characters' if text.length > 4000
     text
   end
 
   def self.app_store_release_notes(dir)
-    read_notes(dir, 'ios', 4000)
+    read_notes(dir, 'ios', 4000).transform_values { |text| apple_text(text) }
+  end
+
+  # App Store Connect rejects emoji in What's New ("can't contain the following character(s)").
+  def self.apple_text(text)
+    text.gsub(/[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+ */, '').strip
   end
 end
 ''';

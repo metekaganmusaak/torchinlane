@@ -10,6 +10,7 @@ import '../store/release_notes.dart';
 import '../config/torchinlane_config.dart';
 import '../scaffold/templates.dart';
 import '../project/flutter_project.dart';
+import '../project/purpose_strings.dart';
 import '../shell/logger.dart';
 import '../shell/process_runner.dart';
 import '../shell/toolchain.dart';
@@ -175,9 +176,10 @@ class DeployCommand extends Command<int> {
         iosSteps.add(_Step('flutter', args, cwd: root));
         iosSteps.add(_Step('bash', ['-ec', fillMissingDsymsScript], cwd: root));
       }
-      final lane = target == 'production' ? 'release' : 'beta';
-      iosSteps.add(_Step('fastlane', [lane], cwd: '$root/ios', env: env));
     }
+    final iosUpload = _Step(
+        'fastlane', [target == 'production' ? 'release' : 'beta'],
+        cwd: '$root/ios', env: env);
 
     if (sharedSteps.isNotEmpty) {
       final sharedOk = await _runSteps(sharedSteps, dryRun: dryRun);
@@ -197,7 +199,9 @@ class DeployCommand extends Command<int> {
     }
     if (buildIos && !credentialFailures.contains('ios')) {
       _logger.info('\n--- iOS ---');
-      if (!await _runSteps(iosSteps, dryRun: dryRun)) {
+      if (!await _runSteps(iosSteps, dryRun: dryRun) ||
+          !_purposeStringsPresent(root, dryRun: dryRun) ||
+          !await _runSteps([iosUpload], dryRun: dryRun)) {
         failedPlatforms.add('ios');
       }
     }
@@ -248,6 +252,24 @@ class DeployCommand extends Command<int> {
       }
     }
     return true;
+  }
+
+  /// Apple rejects a build lacking a purpose string only after the upload,
+  /// when its build number is already used, so check the archive first.
+  bool _purposeStringsPresent(String root, {required bool dryRun}) {
+    _logger.info('\$ check Info.plist purpose strings');
+    final app = Directory(
+        '$root/build/ios/archive/Runner.xcarchive/Products/Applications/Runner.app');
+    if (dryRun || !app.existsSync()) return true;
+    final missing = missingPurposeStrings(app);
+    for (final problem in missing) {
+      _logger.error(problem);
+    }
+    if (missing.isNotEmpty) {
+      _logger.error(
+          'App Store Connect would reject this build (ITMS-90683); nothing was uploaded.');
+    }
+    return missing.isEmpty;
   }
 
   Future<bool> _runSteps(List<_Step> steps, {required bool dryRun}) async {
